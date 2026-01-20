@@ -1,0 +1,14 @@
+[
+{"idsubtipologia":"1","subtipologia":"99","descripcion_subtipologia":"NO ESPECIFICADO"},
+{"idsubtipologia":"2","subtipologia":"EST01","descripcion_subtipologia":"PROMOCION DE LA SALUD"},
+{"idsubtipologia":"3","subtipologia":"JUR01","descripcion_subtipologia":"OFICINAS JURISDICCIONALES"},
+{"idsubtipologia":"4","subtipologia":"T02","descripcion_subtipologia":"CLÍNICA DE ESPECIALIDADES DE ATENCIÓN A LAS ADICCIONES, DESINTOXICACIONES Y TOXICOLOGÍA"},
+{"idsubtipologia":"5","subtipologia":"T03","descripcion_subtipologia":"CLÍNICA DE ESPECIALIDADES DE PREVENCIÓN Y ATENCIÓN A VIOLENCIAS"},
+{"idsubtipologia":"6","subtipologia":"T11","descripcion_subtipologia":"CLÍNICA DE ESPECIALIDADES DE GERIATRÍA"},
+{"idsubtipologia":"7","subtipologia":"UNE03","descripcion_subtipologia":"UNEMES CAPASIT (VIH\/SIDA)"},
+{"idsubtipologia":"8","subtipologia":"UNE04","descripcion_subtipologia":"UNEMES PADECIMIENTOS CARDIOVASCULARES, SORID"},
+{"idsubtipologia":"9","subtipologia":"UNE11","descripcion_subtipologia":"UNEMES DEDICAM (CANCER DE MAMA)"},
+{"idsubtipologia":"10","subtipologia":"UNE12","descripcion_subtipologia":"UNEMES SYGUE (SALUD Y GENERO, UNIDAD ESPECIALIZADA)"},
+{"idsubtipologia":"11","subtipologia":"UNE15","descripcion_subtipologia":"UNEMES DE SALUD MENTAL Y ADICCIONES"},
+{"idsubtipologia":"12","subtipologia":"UNE99","descripcion_subtipologia":"UNEMES OTRAS"}
+]

@@ -1,0 +1,6 @@
+[
+{"idinstitucion":"01","institucion":"Servicios de Salud","descripcion_corta":"Salud","iniciales":"SSA"},
+{"idinstitucion":"02","institucion":"Instituto Mexicano del Seguro Social","descripcion_corta":"IMSS","iniciales":"IMS"},
+{"idinstitucion":"03","institucion":"Instituto de Seguridad y Servicios Sociales para los Trabajadores del Estado","descripcion_corta":"ISSSTE","iniciales":"IST"},
+{"idinstitucion":"04","institucion":"IMSS BIENESTAR","descripcion_corta":"BIENESTAR","iniciales":"IMO"}
+]

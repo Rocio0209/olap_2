@@ -1,0 +1,766 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+[x-cloak] {
+    display: none;
+}
+
+//Fontawesome
+@import "@fortawesome/fontawesome-free/css/all.css";
+
+//Boostratp
+@import 'bootstrap/scss/bootstrap';
+
+
+/********* (css institucional) *********/
+@import "https://ibhidalgo.org/cdn/institucional2025.css";
+/********* (css institucional) *********/
+
+// DataTables
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+@import 'datatables.net-bs5/css/dataTables.bootstrap5.min.css';
+@import 'datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css';
+@import 'datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css';
+@import 'datatables.net-select-bs5/css/select.bootstrap5.css';
+
+//Select2
+$s2bs5-border-color: $border-color;
+@import "/node_modules/select2/dist/css/select2.css";
+@import "/node_modules/select2-bootstrap-5-theme/src/include-all";
+
+//DriverJS
+@import '/node_modules/driver.js/dist/driver.css';
+
+//dhtmlxGantt 
+@import '/node_modules/dhtmlx-gantt/codebase/dhtmlxgantt.css';
+
+/* Personalizando los estilos de DriverJS */
+.driver-popover {
+    color:  #FFFFFF;
+    background-color: var(--colorInstitucional1);
+}
+
+.driver-popover * {
+    font-family: "Institucional-SemiBold" !important;
+}
+
+.driver-popover-title { 
+    font: 19px;
+}
+
+.driver-popover-description {
+    font: 14px;
+}
+
+.driver-popover-progress-text {
+    color:  #FFFFFF;
+}
+/* Personalizando los estilos de DriverJS */
+
+
+/* Cambiar colores de los datatables */
+:root {
+    --dt-row-selected: 221,201,163;
+    --dt-row-selected-text: 0,0,0;
+}
+/*- Cambiar colores de los datatables -*/
+
+/* Filtro de escala de grises en caso de que exista una veda electoral */
+.veda-electoral {
+    filter: grayscale(80%);
+}
+/*- Filtro de escala de grises en caso de que exista una veda electoral -*/
+
+/* Generación de colores de forma dinamica */
+@for $colorInstitucional from 1 through 11 {
+    .bg-institucional#{$colorInstitucional} {
+        background-color: var(--colorInstitucional#{$colorInstitucional}) !important;
+    }
+
+    .color-institucional#{$colorInstitucional} {
+        color: var(--colorInstitucional#{$colorInstitucional}) !important;
+    }
+
+    .borde-izquierdo-institucional#{$colorInstitucional} {
+        border-left: var(--colorInstitucional#{$colorInstitucional}) 4px solid;
+    }
+
+    .borde-derecho-institucional#{$colorInstitucional} {
+        border-right: var(--colorInstitucional#{$colorInstitucional}) 4px solid;
+    }
+
+    .borde-superior-institucional#{$colorInstitucional} {
+        border-top: var(--colorInstitucional#{$colorInstitucional}) 4px solid;
+    }
+
+    .borde-inferior-institucional#{$colorInstitucional} {
+        border-bottom: var(--colorInstitucional#{$colorInstitucional}) 4px solid;
+    }
+
+    @for $porcentajeTransparencia from 1 through 9 { //Generando los colores con su respectivo degradado
+        .bg-institucional#{$colorInstitucional}-#{$porcentajeTransparencia * 100} {
+            background-color: color-mix(in srgb, var(--colorInstitucional#{$colorInstitucional}) #{$porcentajeTransparencia * 10%}, transparent) !important;
+        }
+
+        .color-institucional#{$colorInstitucional}-#{$porcentajeTransparencia * 100} {
+            color: color-mix(in srgb, var(--colorInstitucional#{$colorInstitucional}) #{$porcentajeTransparencia * 10%}, transparent) !important;
+        }
+    }
+}
+
+@for $colorInstitucionalAuxiliar from 1 through 4 {
+    .bg-institucionalAuxiliar#{$colorInstitucionalAuxiliar} {
+        background-color: var(--colorInstitucionalAuxiliar#{$colorInstitucionalAuxiliar}) !important;
+    }
+
+    .color-institucionalAuxiliar#{$colorInstitucionalAuxiliar} {
+        color: var(--colorInstitucionalAuxiliar#{$colorInstitucionalAuxiliar}) !important;
+    }
+
+    .borde-izquierdo-institucionalAuxiliar#{$colorInstitucionalAuxiliar} {
+        border-left: var(--colorInstitucionalAuxiliar#{$colorInstitucionalAuxiliar}) 4px solid;
+    }
+
+    .borde-derecho-institucionalAuxiliar#{$colorInstitucionalAuxiliar} {
+        border-right: var(--colorInstitucionalAuxiliar#{$colorInstitucionalAuxiliar}) 4px solid;
+    }
+
+    .borde-superior-institucionalAuxiliar#{$colorInstitucionalAuxiliar} {
+        border-top: var(--colorInstitucionalAuxiliar#{$colorInstitucionalAuxiliar}) 4px solid;
+    }
+
+    .borde-inferior-institucionalAuxiliar#{$colorInstitucionalAuxiliar} {
+        border-bottom: var(--colorInstitucionalAuxiliar#{$colorInstitucionalAuxiliar}) 4px solid;
+    }
+
+    @for $porcentajeTransparencia from 1 through 9 { //Generando los colores con su respectivo degradado
+        .bg-institucionalAuxiliar#{$colorInstitucionalAuxiliar}-#{$porcentajeTransparencia * 100} {
+            background-color: color-mix(in srgb, var(--colorInstitucionalAuxiliar#{$colorInstitucionalAuxiliar}) #{$porcentajeTransparencia * 10%}, transparent) !important;
+        }
+
+        .color-institucionalAuxiliar#{$colorInstitucionalAuxiliar}-#{$porcentajeTransparencia * 100} {
+            color: color-mix(in srgb, var(--colorInstitucionalAuxiliar#{$colorInstitucionalAuxiliar}) #{$porcentajeTransparencia * 10%}, transparent) !important;
+        }
+    }
+}
+/* Generación de colores de forma dinamica */
+
+/*Incrementar el área util del body en pantallas XXL*/
+@media (min-width: 1399.99px) {
+    div.container{
+        margin-left: 5% !important;
+        margin-right: 5% !important;
+        max-width: 90% !important
+    }
+
+    div.headerpagina{
+        margin-left: 5% !important;
+        margin-right: 5% !important;
+        max-width: 90% !important
+    }
+}
+
+/*Estilos para los Formularios*/
+label{
+    font-weight: bold !important;
+}
+
+/*Estilo para tablas*/
+table{
+    width: 100% !important;
+    font-size: 12px;
+}
+
+table thead th{
+    font-size: 12px;
+    background-color: #00000000 !important;
+    color:var(--colorInstitucional2) !important;
+    border-bottom: var(--colorInstitucional4) 4px solid !important;
+}
+
+table tfoot th{
+    font-size: 12px;
+    background-color: var(--colorInstitucional2) !important;
+    color: #FFFFFF !important;
+}
+
+table.dataTable a {
+    cursor: pointer;
+    font-size: 17px;
+}
+
+table.dataTable th {
+    font-size: 14px;
+}
+
+/***********************Style para checkbox***********************/
+[type='checkbox']{
+    border-color: #6B7280 !important;
+}
+
+/*Input checkbox style*/
+.input_wrapper{
+    position: relative;
+    cursor: pointer;
+}
+
+/*caja desactivada*/
+.input_wrapper input[type="checkbox"]{
+    width: 60px;
+    height: 28px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background: #F7C9C4;
+    border-radius: 12px;
+    position: relative;
+    outline: 0;
+    -webkit-transition: all .2s;
+    transition: all .2s;
+}
+
+/*boton desactivado*/
+.input_wrapper input[type="checkbox"]:not(:checked):after{
+    position: absolute;
+    content: "no";
+    text-align: center;
+    color: #FFFFFF;
+    top: 0px;
+    left: 0px;
+    width: 30px;
+    height: 26px;
+    background: var(--bs-danger);
+    border-radius: 11px 0 0 11px;
+    -webkit-transition: all .2s;
+    transition: all .2s;
+    padding-top: 1px;
+}
+
+/*boton activado*/
+.input_wrapper input[type="checkbox"]:checked:after{
+    position: absolute;
+    content: "si";
+    text-align: center;
+    color: #FFFFFF;
+    left: 28px;
+    width: 30px;
+    height: 26px;
+    background: var(--bs-success);
+    border-radius: 0 11px 11px 0;
+    -webkit-transition: all .2s;
+    transition: all .2s;
+    padding-top: 1px;
+}
+
+/*caja activado*/
+.input_wrapper input[type="checkbox"]:checked{
+    background: #bee6cf;
+}
+
+/*iconos*/
+.input_wrapper input[type="checkbox"] + label .icon, .input_wrapper input[type="checkbox"]:not(:checked) + label .icon:before, .input_wrapper input[type="checkbox"]:checked + label .icon:after{
+    position: absolute;
+    left:0;
+    top:1px;
+    cursor:pointer;
+    font-size: 18px;
+    font-weight: bold;
+    -webkit-transition: all .2s;
+    transition: all .2s;
+}
+
+/*icono uncheck rojo*/
+[type="checkbox"]:not(:checked) + label .icon:before {
+    font-family: 'Font Awesome\ 5 Free';
+    content: "\f057";
+    color: var(--bs-danger);
+    margin-left: 36px;
+    margin-top: -2px;
+}
+
+/*icono check verde*/
+[type="checkbox"]:checked + label .icon:after {
+    font-family: 'Font Awesome\ 5 Free';
+    content: "\f058";
+    color: var(--bs-success);
+    margin-left: 6px;
+    margin-top:-2px;
+}
+/***********************Style para checkbox***********************/
+
+/*********************Estilos para notificación de errores*********************/
+div.tiperror{
+    color:#FF0000;
+    border: 1px solid #FF0000;
+    border-radius: 7px;
+    margin-top: 5px;
+    padding: 1px 2px;
+}
+
+div.tiperror>ul{
+    margin-bottom: 5px;
+}
+
+/*Estilo para indicar error en algun campo de Forms*/
+.errorstyle{
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1),0 0 10px rgba(200,10,16,0.5);
+}
+
+.align-center{
+    margin: 0, auto;
+}
+
+/* Menú */
+a.activaMenu{
+    background-color:#FFFFFF !important;
+    color: #000000 !important;
+    font-weight: bold;
+}
+
+/*Div de Precarga para bloqueos de pantalla*/
+#preCarga{
+    z-index: 1001;
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    top: 50%;
+    margin-top: -50px;
+    left: 50%;
+    margin-left: -50px;
+    text-align: center;
+    color: #FFFFFF;
+}
+
+#preCargaDiv{
+    z-index: 100000000;
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    right:0px;
+    bottom:0px;
+    background: rgba(0,0,0,.8);
+}
+/*-Div de Precarga para bloqueos de pantalla-*/
+
+
+/*------------************Style Modales Bootstrap--------************----*/
+
+/****Colores de encabezados****/
+.modal-header.success{
+    border-top: solid 5px var(--colorInstitucional1);
+    border-bottom: solid 3px var(--colorInstitucional4);
+}
+
+.modal-header.danger{
+    border-top: solid 5px var(--colorInstitucional7);
+    border-bottom: solid 3px var(--colorInstitucional4);
+}
+
+.modal-header.primary{
+    border-top: solid 5px var(--bs-primary);
+}
+
+.modal-header.secondary{
+    border-top: solid 5px var(--bs-secondary);
+}
+
+.modal-header.warning{
+    border-top: solid 5px var(--bs-warning);
+}
+
+/****Colores de bordes****/
+.modal-content.b2success{
+    border: 2px solid var(--colorInstitucional1);
+}
+
+.modal-content.b2danger{
+    border: 2px solid var(--colorInstitucional7);
+}
+
+.modal-content.b2primary{
+    border: 2px solid var(--bs-primary);
+}
+
+.modal-content.b2secondary{
+    border: 2px solid var(--bs-secondary);
+}
+
+.modal-content.b2warning{
+    border: 2px solid var(--bs-warning);
+}
+
+
+/***************Ajuste de Tañamo minimo de modales*****************/
+.modal-dialog.modal-normal {
+    max-width: 600px;
+}
+
+.modal-dialog.modal-700 {
+    max-width: 700px;
+}
+
+.modal-dialog.modal-800 {
+    max-width: 800px;
+}
+
+.modal-dialog.modal-xxl {
+    max-width: 94%;
+}
+/*------------************Style Modales Bootstrap--------************----*/
+
+/*------------************Style Bootstrap SideMenu--------************----*/
+.dropdown-toggle { outline: 0; }
+
+.btn-toggle {
+    padding: .25rem .5rem;
+    font-weight: 600;
+    color: var(--bs-emphasis-color);
+    background-color: transparent;
+}
+.btn-toggle:hover,
+.btn-toggle:focus {
+    color: rgba(var(--bs-emphasis-color-rgb), .85);
+    background-color: var(--bs-tertiary-bg);
+}
+
+.btn-toggle::before {
+    width: 1.25em;
+    line-height: 0;
+    content: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='rgba%280,0,0,.5%29' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M5 14l6-6-6-6'/%3e%3c/svg%3e");
+    transition: transform .35s ease;
+    transform-origin: .5em 50%;
+}
+
+.btn-toggle[aria-expanded="true"]::before {
+    transform: rotate(90deg);
+}
+
+.btn-toggle-nav a {
+    padding: .1875rem .5rem;
+    margin-top: .125rem;
+    margin-left: 1.25rem;
+}
+.btn-toggle-nav a:hover,
+.btn-toggle-nav a:focus {
+    background-color: #D2F4EA;
+}
+
+.scrollarea {
+    overflow-y: auto;
+}
+
+.collapse{
+    visibility: visible;
+}
+
+.btn-menu{
+    color: var(--bs-nav-link-color);
+    padding:var(--bs-nav-link-padding-y) var(--bs-nav-link-padding-x);
+}
+
+.btn-toggle-nav a {
+    padding:var(--bs-nav-link-padding-y) var(--bs-nav-link-padding-x);
+}
+/*------------************Style Bootstrap SideMenu--------************----*/
+
+/*------------************Style SideBar Expansible--------************----*/
+// .navbar-nav.side-nav
+.navbar-expand-lg #navbar-lateral {
+    flex-direction: column;
+}
+.leftmenutrigger, .navbar-nav li a .shortmenu {
+    display: none;
+}
+.margen-navbar-lateral {
+    margin-left: 0px;
+}
+@media(min-width:992px) {
+    .margen-navbar-lateral {
+        margin-left: 30px;
+    }
+    #navbar-lateral:hover {
+        left: 0;
+    }
+    .side-nav li a {
+        padding: 20px
+    }
+    .navbar-nav li a .shortmenu {
+        float: right;
+        display: block;
+        opacity: 1;
+    }
+    #navbar-lateral:hover li a .shortmenu {
+        opacity: 0;
+    }
+    #navbar-lateral {
+        background: #ADC3BECC;
+        position: fixed;
+        top: 64px;
+        flex-direction: column !important;
+        left: -160px;
+        width: 200px;
+        overflow-y: auto;
+        bottom: 0;
+        overflow-x: hidden;
+        z-index: 10000;
+        border-radius: 0;
+        border-right: var(--colorInstitucional4) 4px solid;
+    }
+    .navbar-expand-lg .navbar-nav .dropdown-menu {
+        position: fixed;
+    }
+    .nav-link.activaMenu {
+        border-radius: 0;
+    }
+    .dropdown-menu.show {
+        background: var(--colorInstitucional3);
+        position: fixed;
+        top: 64px;
+        flex-direction: column !important;
+        left: 200px;
+        overflow-y: auto;
+        bottom: 0;
+        overflow-x: hidden;
+        margin-top: 0px;
+        border-radius: 0;
+    }
+    a.nav-link {
+        color: var(--colorInstitucional2);
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+    }
+    .side-nav li {
+        border-bottom: 0px !important;
+    }
+    .dropdown-item {
+        color: var(--colorInstitucional2);
+        white-space: unset;
+        padding-top: 2px !important;
+        padding-bottom: 1px !important;
+    } 
+}
+.transicion {
+    -webkit-transition: all .2s ease-in-out;
+    -moz-transition: all .2s ease-in-out;
+    -o-transition: all .2s ease-in-out;
+    -ms-transition: all .2s ease-in-out;
+    transition: all .2s ease-in-out;
+}
+.sin-transicion {
+    -o-transition: none !important;
+    -ms-transition: none !important;
+    -moz-transition: none !important;
+    -webkit-transition: none !important;
+    transition: none !important;
+}
+.navbar-nav li a svg {
+    font-size: 25px;
+    float: left;
+    margin: 0 10px 0 5px;
+}
+.side-nav li { 
+    border-bottom: 1px solid #50575D;
+}
+/*------------************Style SideBar Expansible--------************----*/
+
+
+.txt-shadow {
+    text-shadow: 0 6px 5px #000000;
+}
+
+/* ===== Desktop ===== */
+.bg-logo {
+    width: 250px;
+    height: auto;
+    filter: drop-shadow(0 10px 4px #000000);
+    z-index: 10;
+}
+
+/* ===== Móvil ===== */
+@mixin linea-login {
+    /* background: linear-gradient(
+        to right,
+        var(--colorDegradadoInstitucional1) 0%,     // completamente transparente a la izquierda 
+        var(--colorDegradadoInstitucional2) 50%,    // opaco al centro
+        var(--colorDegradadoInstitucional1) 100%    // completamente transparente a la derecha
+    );
+    backdrop-filter: blur(6px);                     // efecto vidrio
+    -webkit-backdrop-filter: blur(6px); */
+    width: 100vw;
+    padding: 12px 0;
+}
+
+.linea-login {
+    @include linea-login;
+    top: 30px;
+}
+
+.bg-logo-movil {
+    width: 200px;                            /* tamaño en móvil */
+    max-width: 90vw;                         /* evita que se desborde */
+    height: auto;
+    filter: drop-shadow(0 8px 4px rgba(0,0,0,.9));
+}
+
+@media(min-width:768px){
+    .linea-login-2 {
+        @include linea-login;
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 40px;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+@media(max-width:639px){
+    .linea-login-2 {
+        margin-top: 110px;
+        margin-bottom: 30px;
+    }
+}
+
+@media (min-height:1000px){
+    .linea-login-2 {
+        position: absolute;
+        top: 130px;
+    }
+}
+
+@media (min-height:1280px){
+    .linea-login-2 {
+        position: absolute;
+        top: 250px;
+    }
+}
+
+@media (max-height: 642px){
+    .bg-logo {
+        visibility: hidden;
+    }
+}
+
+.section-title::before {
+    content: "";
+    width: 8px;
+    height: 20px;
+    background: var(--colorinstitucional4);
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.dataTable tbody tr td.all a { //La columna de acciones esta en linea
+    display: inline-block;
+}
+
+.dataTable tbody tr td.all a { //Aplica para todos los anchors de los DataTables
+    color: var(--colorInstitucional2);
+    background-color: #C6CAD0;
+    border-radius: 8px;
+    padding: 2px;
+    margin-top: 2px;
+    min-width: 25px;
+}
+
+.dataTable tbody tr td.all a span { //Aplica para todos los anchors de los DataTables
+    width: 100%;
+    text-align: center;
+}
+
+.dataTable tbody tr.selected td.all a { //Aplica para todos los anchors de los DataTables
+    color: var(--colorInstitucional2) !important;
+}
+/* Paginación Bootstrap: colores de marca */
+.pagination .page-link { 
+    color: var(--colorInstitucional11);              /* texto normal */
+}
+
+.pagination .page-link:hover {
+    background-color:var(--colorInstitucional10);
+    color: #000000;              /* hover del texto normal */
+}
+
+.pagination .page-item.active .page-link {
+    background-color: var(--colorInstitucional11);   /* activo */
+    border-color: var(--colorInstitucional11);       /* borde del activo */
+    color: #FFFFFF;                 /* texto del activo */
+}
+
+.btn.btn-success { //Sobreescribiendo la clase success de Bootstrap
+    background-color: var(--colorInstitucional1) !important; 
+    border-color: var(--colorInstitucional2) !important;
+    color: #FFFFFF;
+    border-radius: 8px;
+    padding: 5px 9px;
+}
+
+.btn.btn-success:hover {
+    background-color: var(--colorInstitucional2) !important;
+    border-color: var(--colorInstitucional1) !important;
+    color: #FFFFFF;
+}
+
+.btn.btn-success:focus-visible {
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--colorInstitucional1) 50%, transparent) !important;
+}
+
+.btn.btn-danger { //Sobreescribiendo la clase danger de Bootstrap
+    background-color: var(--colorInstitucional7) !important;
+    border-color: var(--colorInstitucional8) !important;
+    color: #FFFFFF;
+    border-radius: 8px;
+    padding: 5px 9px;
+}
+
+.btn.btn-danger:hover {
+    background-color: var(--colorInstitucional8) !important;
+    border-color: var(--colorInstitucional7) !important;
+    color: #FFFFFF;
+}
+
+.btn.btn-danger:focus-visible {
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--colorInstitucional7) 50%, transparent) !important;
+}
+
+.btn.btn-primary { //Sobreescribiendo la clase primary de Bootstrap
+    background-color: var(--colorInstitucional4) !important;
+    border-color: var(--colorInstitucional6) !important; 
+    color: #FFFFFF;
+    border-radius: 8px;
+    padding: 5px 9px;
+}
+
+.btn.btn-primary:hover {
+    background-color: var(--colorInstitucional3) !important; 
+    border-color: var(--colorInstitucional4) !important; 
+    color: #000000;
+}
+
+.btn.btn-primary:focus-visible {
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--colorInstitucional5) 50%, transparent) !important;
+}
+
+.btn.btn-secondary { //Sobreescribiendo la clase secondary de Bootstrap
+    background-color: var(--colorInstitucional5) !important;
+    border-color: var(--colorInstitucional6) !important; 
+    color: #FFFFFF;
+    border-radius: 8px;
+    padding: 5px 9px;
+}
+
+.btn.btn-secondary:hover {
+    background-color: var(--colorInstitucional6) !important; 
+    border-color: var(--colorInstitucional5) !important; 
+    color: #FFFFFF;
+}
+
+.btn.btn-secondary:focus-visible {
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--colorInstitucional5) 50%, transparent) !important;
+}
+
+.bg-movil {
+    background-color: #EBE5E5 !important;
+    border-radius: 10px;
+}
