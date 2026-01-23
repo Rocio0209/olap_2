@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import pythoncom
 import win32com.client
+from typing import Callable, Any
 
 from middlewares.auth import verify_token
 from config import get_connection_string
@@ -57,140 +58,112 @@ def ejecutar_query_lista(conn, query: str, field: str):
         except Exception:
             pass
 
+def ejecutar_conexion_olap(fn: Callable[[Any], Any]):
+    """
+    Maneja:
+    - CoInitialize / CoUninitialize
+    - Conexión OLAP
+    - Cierre seguro
+    Ejecuta la función fn(conn) y devuelve su resultado
+    """
+    conn = None
+    try:
+        pythoncom.CoInitialize()
+        conn = crear_conexion(get_connection_string())
+        return fn(conn)
 
+    finally:
+        if conn:
+            try:
+                conn.Close()
+            except Exception:
+                pass
+        pythoncom.CoUninitialize()
 # =========================
 # Endpoint de prueba
 # =========================
-
 @app.get("/cubos_disponibles", dependencies=[Depends(verify_token)])
 def cubos_disponibles():
-    """Endpoint básico: Cubos OLAP disponibles en el servidor"""
-    conn = None
     try:
-        pythoncom.CoInitialize()
+        def consulta(conn):
+            return ejecutar_query_lista(
+                conn,
+                "SELECT [CATALOG_NAME] FROM $system.DBSCHEMA_CATALOGS",
+                "CATALOG_NAME",
+            )
 
-        conn = crear_conexion(get_connection_string())
-        cubos = ejecutar_query_lista(
-            conn,
-            "SELECT [CATALOG_NAME] FROM $system.DBSCHEMA_CATALOGS",
-            "CATALOG_NAME",
-        )
-
+        cubos = ejecutar_conexion_olap(consulta)
         return {"cubos": sorted(set(cubos))}
 
     except Exception:
-        # En producción mejor no exponer detalles internos
         return JSONResponse(status_code=500, content={"error": "Error interno"})
 
-    finally:
-        if conn:
-            try:
-                conn.Close()
-            except Exception:
-                pass
-        pythoncom.CoUninitialize()
 
 @app.get("/cubos_sis", dependencies=[Depends(verify_token)])
-def cubos_disponibles_filtrados():
-    conn = None
+def cubos_sis():
     try:
-        pythoncom.CoInitialize()
-        conn = crear_conexion(get_connection_string())
+        def consulta(conn):
+            cubos = ejecutar_query_lista(
+                conn,
+                "SELECT [CATALOG_NAME] FROM $system.DBSCHEMA_CATALOGS",
+                "CATALOG_NAME",
+            )
 
-        cubos = ejecutar_query_lista(
-            conn,
-            "SELECT [CATALOG_NAME] FROM $system.DBSCHEMA_CATALOGS",
-            "CATALOG_NAME",
-        )
+            sis_regex = re.compile(r"^SIS_(\d{4})")
+            sinba_regex = re.compile(r"^Cubo solo sinba (\d{4})")
 
-        cubos_unicos = sorted(set(cubos))
+            permitidos = []
+            for c in set(cubos):
+                name = (c or "").strip()
 
-        sis_regex = re.compile(r"^SIS_(\d{4})")
-        sinba_regex = re.compile(r"^Cubo solo sinba (\d{4})")
-
-        permitidos = []
-
-        for c in cubos_unicos:
-            name = (c or "").strip()
-
-            # ---- SIS ----
-            m_sis = sis_regex.match(name)
-            if m_sis:
-                year = int(m_sis.group(1))
-                if year >= 2019:
+                m = sis_regex.match(name)
+                if m and int(m.group(1)) >= 2019:
                     permitidos.append(name)
-                continue
+                    continue
 
-            # ---- SINBA ----
-            m_sinba = sinba_regex.match(name)
-            if m_sinba:
-                year = int(m_sinba.group(1))
-                if year >= 2019:
+                m = sinba_regex.match(name)
+                if m and int(m.group(1)) >= 2019:
                     permitidos.append(name)
-                continue
 
-        return {"cubos": permitidos}
+            return permitidos
+
+        return {"cubos": ejecutar_conexion_olap(consulta)}
 
     except Exception:
         return JSONResponse(status_code=500, content={"error": "Error interno"})
-    finally:
-        if conn:
-            try:
-                conn.Close()
-            except Exception:
-                pass
-        pythoncom.CoUninitialize()
+
 
 @app.get("/cubos_sis_estandarizados", dependencies=[Depends(verify_token)])
-def cubos_estandarizados():
-    conn = None
+def cubos_sis_estandarizados():
     try:
-        pythoncom.CoInitialize()
-        conn = crear_conexion(get_connection_string())
+        def consulta(conn):
+            cubos = ejecutar_query_lista(
+                conn,
+                "SELECT [CATALOG_NAME] FROM $system.DBSCHEMA_CATALOGS",
+                "CATALOG_NAME",
+            )
 
-        cubos = ejecutar_query_lista(
-            conn,
-            "SELECT [CATALOG_NAME] FROM $system.DBSCHEMA_CATALOGS",
-            "CATALOG_NAME",
-        )
+            sis_regex = re.compile(r"^SIS_(\d{4})")
+            sinba_regex = re.compile(r"^Cubo solo sinba (\d{4})")
 
-        cubos_unicos = set(cubos)
+            estandarizados = set()
 
-        sis_regex = re.compile(r"^SIS_(\d{4})")
-        sinba_regex = re.compile(r"^Cubo solo sinba (\d{4})")
+            for c in set(cubos):
+                name = (c or "").strip()
 
-        estandarizados = set()
+                m = sis_regex.match(name)
+                if m and int(m.group(1)) >= 2019:
+                    estandarizados.add(f"SIS {m.group(1)}")
+                    continue
 
-        for c in cubos_unicos:
-            name = (c or "").strip()
+                m = sinba_regex.match(name)
+                if m and int(m.group(1)) >= 2019:
+                    estandarizados.add(f"SIS {m.group(1)}")
 
-            # SIS_YYYY...
-            m_sis = sis_regex.match(name)
-            if m_sis:
-                year = int(m_sis.group(1))
-                if year >= 2019:
-                    estandarizados.add(f"SIS {year}")
-                continue
+            return sorted(estandarizados)
 
-            # Cubo solo sinba YYYY
-            m_sinba = sinba_regex.match(name)
-            if m_sinba:
-                year = int(m_sinba.group(1))
-                if year >= 2019:
-                    estandarizados.add(f"SIS {year}")
-                continue
-
-        return {"cubos": sorted(estandarizados)}
+        return {"cubos": ejecutar_conexion_olap(consulta)}
 
     except Exception:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Error interno"},
-        )
-    finally:
-        if conn:
-            try:
-                conn.Close()
-            except Exception:
-                pass
-        pythoncom.CoUninitialize()
+        return JSONResponse(status_code=500, content={"error": "Error interno"})
+
