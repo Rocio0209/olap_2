@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+from fastapi import Query
 import re
 from fastapi import FastAPI, Depends
 from fastapi.responses import JSONResponse
@@ -297,9 +298,11 @@ def tablas_en_catalogo(table_catalog: str):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-
 @app.get("/cubos_en_catalogo", dependencies=[Depends(verify_token)])
-def cubos_en_catalogo(catalogo: str):
+def cubos_en_catalogo(
+    catalogo: str,
+    incluir_dimensiones: bool = Query(False, description="Incluye cubos $DIM_* (dimension cubes)")
+):
     try:
         catalogo = (catalogo or "").strip()
 
@@ -320,29 +323,35 @@ def cubos_en_catalogo(catalogo: str):
 
             rows = ejecutar_query_rows_execute(conn, q)
 
-            # filtra aquí (en vez de IS NOT NULL)
             out = []
             for r in rows:
                 cube_name = (r.get("CUBE_NAME") or "").strip()
                 if not cube_name:
                     continue
+
+                cube_source = (r.get("CUBE_SOURCE") or "").strip()
+
+                # Si NO quieres dimension cubes, solo deja source=1
+                if not incluir_dimensiones and cube_source != "1":
+                    continue
+
                 out.append({
                     "catalogo": r.get("CATALOG_NAME"),
                     "cubo": cube_name,
                     "caption": r.get("CUBE_CAPTION"),
                     "cube_type": r.get("CUBE_TYPE"),
-                    "cube_source": r.get("CUBE_SOURCE"),
+                    "cube_source": cube_source,  # "1" real, "2" dimensión
                     "description": r.get("DESCRIPTION"),
+                    "es_dimension_cube": cube_source == "2" or cube_name.startswith("$"),
                 })
 
-            out.sort(key=lambda x: x["cubo"])
+            out.sort(key=lambda x: (x["cube_source"], x["cubo"] or ""))
             return {"catalogo": catalogo, "total": len(out), "cubos": out}
 
         return ejecutar_conexion_olap(consulta, catalogo=catalogo)
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-
 
 @app.get("/dimensiones_disponibles", dependencies=[Depends(verify_token)])
 def dimensiones_disponibles(catalogo: str, cubo: str):
