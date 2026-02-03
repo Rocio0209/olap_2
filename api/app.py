@@ -87,12 +87,12 @@ def cubos_sis_estandarizados():
                 name = (c or "").strip()
 
                 m = sis_regex.match(name)
-                if m and int(m.group(1)) >= 2019:
+                if m and int(m.group(1)) >= 2020:
                     estandarizados.add(f"SIS {m.group(1)}")
                     continue
 
                 m = sinba_regex.match(name)
-                if m and int(m.group(1)) >= 2019:
+                if m and int(m.group(1)) >= 2020:
                     estandarizados.add(f"SIS {m.group(1)}")
 
             return sorted(estandarizados)
