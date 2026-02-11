@@ -4,11 +4,11 @@ load_dotenv()
 import os
 from fastapi import Query
 import re
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Query, Body
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import unicodedata
-
+from collections import defaultdict
 
 import pythoncom
 import win32com.client
@@ -16,6 +16,7 @@ from typing import Callable, Any
 
 from middlewares.auth import verify_token
 from config import get_connection_string
+
 
 app = FastAPI()
 
@@ -286,6 +287,320 @@ def _find_measure_unique_name(conn, catalogo: str, cubo: str, contains_text: str
             if mun:
                 return mun
     return None
+
+
+def sql_lit(s: str) -> str:
+    """Escapa comillas simples para DMVs ($system.*)."""
+    return (s or "").replace("'", "''").strip()
+
+def mdx_str(s: str) -> str:
+    """Escapa comillas dobles para meter texto en ' "..." ' dentro de MDX."""
+    return (s or "").replace('"', '""').strip()
+
+def mdx_key(s: str) -> str:
+    """Para armar .&[KEY]."""
+    return (s or "").strip()
+
+def norm(s: str) -> str:
+    """Normaliza (mayúsculas, sin acentos, espacios simples)."""
+    s = (s or "").strip().upper()
+    s = "".join(
+        c for c in unicodedata.normalize("NFKD", s)
+        if not unicodedata.combining(c)
+    )
+    return " ".join(s.split())
+
+
+# -----------------------------
+# MDX - leer miembros del Axis(0)
+# -----------------------------
+def mdx_members_axis0(conn: Any, mdx: str) -> list[dict]:
+    """
+    Ejecuta MDX que devuelve un SET en el eje 0 y regresa miembros con metadata.
+    """
+    cs = conn.Execute(mdx)
+    axis = cs.Axes(0)
+
+    out = []
+    for pos in axis.Positions:
+        mem = pos.Members(0)
+        lvl = getattr(mem, "Level", None)
+        out.append({
+            "member_caption": getattr(mem, "Caption", None),
+            "member_name": getattr(mem, "Name", None),
+            "member_unique_name": getattr(mem, "UniqueName", None),
+            "level_number": getattr(lvl, "LevelNumber", None),
+            "level_unique_name": getattr(lvl, "UniqueName", None),
+        })
+    return out
+
+
+# -----------------------------
+# DMVs - resolver captions por unique name (con cache)
+# -----------------------------
+def dmv_member_info(conn, catalogo: str, cubo: str, member_unique_name: str, ejecutar_query_rows_execute) -> dict | None:
+    cat = sql_lit(catalogo)
+    cube = sql_lit(cubo)
+    mun = sql_lit(member_unique_name)
+
+    q = f"""
+    SELECT TOP 1
+      [MEMBER_UNIQUE_NAME],
+      [MEMBER_CAPTION],
+      [MEMBER_NAME],
+      [LEVEL_NUMBER],
+      [LEVEL_UNIQUE_NAME]
+    FROM $system.MDSCHEMA_MEMBERS
+    WHERE [CATALOG_NAME] = '{cat}'
+      AND [CUBE_NAME] = '{cube}'
+      AND [MEMBER_UNIQUE_NAME] = '{mun}'
+    """
+    rows = ejecutar_query_rows_execute(conn, q) or []
+    return rows[0] if rows else None
+
+
+def dmv_member_info_many(conn, catalogo: str, cubo: str, unique_names: list[str], ejecutar_query_rows_execute) -> dict[str, dict | None]:
+    """
+    Resuelve unique_names -> info (cache en memoria por llamada).
+    """
+    cache: dict[str, dict | None] = {}
+    out: dict[str, dict | None] = {}
+    for un in unique_names:
+        un = (un or "").strip()
+        if not un:
+            continue
+        if un not in cache:
+            cache[un] = dmv_member_info(conn, catalogo, cubo, un, ejecutar_query_rows_execute)
+        out[un] = cache[un]
+    return out
+
+
+# -----------------------------
+# Utilidades para tus rows MDX (dicts)
+# -----------------------------
+def mdx_rows_extract_unique_names(rows: list[dict]) -> list[str]:
+    """
+    Tus rows suelen venir como dict { "<unique_name>": "valor", ... }.
+    Extrae solo keys únicas.
+    """
+    uniq, seen = [], set()
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        for k in r.keys():
+            k = (k or "").strip()
+            if k and k not in seen:
+                seen.add(k)
+                uniq.append(k)
+    return uniq
+
+
+def build_ruta_detalle(unique_names: list[str], captions_map: dict[str, dict | None]) -> list[dict]:
+    detalle = []
+    for un in unique_names:
+        info = captions_map.get(un) or {}
+        detalle.append({
+            "member_unique_name": un,
+            "member_caption": info.get("MEMBER_CAPTION") or info.get("MEMBER_NAME") or un,
+            "level_number": info.get("LEVEL_NUMBER"),
+            "level_unique_name": info.get("LEVEL_UNIQUE_NAME"),
+        })
+    return detalle
+
+
+def pick_caption_by_level(ruta_detalle: list[dict], level_unique_name: str) -> str | None:
+    level_unique_name = (level_unique_name or "").strip()
+    for r in ruta_detalle or []:
+        if (r.get("level_unique_name") or "").strip() == level_unique_name:
+            return r.get("member_caption")
+    return None
+
+
+def format_unidad_medica(ruta_detalle: list[dict], nombre_unidad: str | None, clue_input: str) -> dict:
+    return {
+        "clues": pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[CLUES]") or clue_input,
+        "nombre_unidad": nombre_unidad,
+        "entidad": pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Entidad]"),
+        "jurisdiccion": pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Jurisdicción]"),
+        "municipio": pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Municipio]"),
+    }
+
+
+
+def _norm_txt(s: str) -> str:
+    s = (s or "").strip().upper()
+    s = "".join(
+        c for c in unicodedata.normalize("NFKD", s)
+        if not unicodedata.combining(c)
+    )
+    return " ".join(s.split())
+
+def es_migrante(nombre_variable: str) -> bool:
+    return "MIGRANTE" in _norm_txt(nombre_variable)
+
+
+def extraer_edad_inicial(nombre_variable: str) -> int:
+    nombre = nombre_variable.upper()
+
+    if "RECIÉN NACIDO" in nombre or "24 HORAS" in nombre:
+        return 0
+
+    match = re.search(r"(\d+)\s*A\s*(\d+)\s*D[IÍ]AS?", nombre)
+    if match:
+        return int(match.group(1))
+
+    match = re.search(r"(\d+)\s*A\s*(\d+)\s*MESES?", nombre)
+    if match:
+        return int(match.group(1)) * 30
+
+    match = re.search(r"(\d+)\s*A\s*(\d+)\s*A[NÑ]OS?", nombre)
+    if match:
+        return int(match.group(1)) * 365
+
+    match = re.search(r"(\d+)\s*(D[IÍ]AS?|MESES?|A[NÑ]OS?)", nombre)
+    if match:
+        valor = int(match.group(1))
+        unidad = match.group(2)
+        if "DÍA" in unidad or "DIA" in unidad:
+            return valor
+        elif "MES" in unidad:
+            return valor * 30
+        elif "AÑO" in unidad:
+            return valor * 365
+
+    match = re.search(r"(\d+)\s*Y\s*M[AÁ]S\s*A[NÑ]OS", nombre)
+    if match:
+        return int(match.group(1)) * 365
+
+    return 9999
+
+
+def normalizar_apartado(nombre):
+    nombre = nombre.upper()
+    nombre = nombre.replace("Ó", "O").replace("Í", "I").replace("É", "E").replace("Á", "A").replace("Ú", "U")
+    nombre = nombre.replace("  ", " ")
+    nombre = nombre.strip()
+    return nombre
+GRUPOS_APARTADOS = {
+    normalizar_apartado("127 APLICACIÓN DE BIOLÓGICOS SRP TRIPLE VIRAL"): [
+        "PARA INICIAR O COMPLETAR ESQUEMA"
+    ],
+    normalizar_apartado("129 APLICACIÓN DE BIOLÓGICOS VPH"): [
+        "NIÑAS Y/O ADOLESCENTES VÍCTIMAS DE VIOLACIÓN SEXUAL",
+        "MUJERES CIS Y TRANS DE 11 A 49 AÑOS QUE VIVEN CON VIH",
+        "HOMBRES CIS Y TRANS DE 11 A 49 AÑOS QUE VIVEN CON VIH"
+    ],
+    normalizar_apartado("344 APLICACIÓN DE BIOLÓGICOS COVID-19"): [
+        "5 A 11 AÑOS",
+        "FACTORES DE RIESGO",
+        "60 AÑOS Y MÁS",
+        "EMBARAZADAS",
+        "PERSONAL DE SALUD",
+        "OTROS GRUPOS DE BAJA PRIORIDAD"
+    ],
+    normalizar_apartado("274 APLICACIÓN DE BIOLÓGICOS ROTAVIRUS RV1"): [
+        "PARA INICIAR O COMPLETAR ESQUEMA"
+    ],
+    normalizar_apartado("275 APLICACIÓN DE BIOLÓGICOS HEXAVALENTE"): [
+        "INICIAR O COMPLETAR ESQUEMA"
+    ],
+    normalizar_apartado("132 APLICACIÓN DE BIOLÓGICOS Td"): [
+        "PRIMERA EMBARAZADAS",
+        "SEGUNDA EMBARAZADAS",
+        "TERCERA EMBARAZADAS",
+        "REFUERZO EMBARAZADAS",
+        "PRIMERA MUJERES NO EMBARAZADAS",
+        "PRIMERA HOMBRES",
+        "SEGUNDA MUJERES NO EMBARAZADAS",
+        "SEGUNDA HOMBRES",
+        "TERCERA MUJERES NO EMBARAZADAS",
+        "TERCERA HOMBRES",
+        "REFUERZO MUJERES",
+        "REFUERZO HOMBRES"
+    ],
+}
+
+# ================================
+# FUNCIÓN PARA OBTENER GRUPOS
+# ================================
+def obtener_grupos_para_apartado(apartado_nombre):
+    """
+    apartado_nombre → string EXACTO del JSON
+    Ej: "127 APLICACIÓN DE BIOLÓGICOS SRP TRIPLE VIRAL"
+    """
+
+    # Obtenemos los grupos definidos para este apartado
+    grupos_definidos = GRUPOS_APARTADOS.get(apartado_nombre, [])
+
+    # Insertar "sin grupo" al inicio
+    grupos_finales = ["sin grupo"] + grupos_definidos + ["migrante"]
+
+    return grupos_finales
+
+# ================================
+# FUNCIÓN PARA ASIGNAR GRUPO A UNA VARIABLE
+# ================================
+def asignar_grupo(nombre_variable: str, grupos_apartado: list) -> str:
+    """
+    Asigna el grupo correcto según:
+      - Si contiene la palabra MIGRANTE → 'migrante'
+      - Si contiene parcialmente el texto de un grupo → ese grupo
+      - Si no coincide con ningún grupo → 'sin grupo'
+    """
+
+    nombre = nombre_variable.upper()
+
+    # 1. Detectar migrantes
+    if "MIGRANTE" in nombre:
+        return "migrante"
+
+    # 2. Buscar coincidencia parcial con grupos
+    for grupo in grupos_apartado:
+        g = grupo.upper()
+        if g in nombre:
+            return grupo   # devuelve el grupo original
+
+    # 3. Sin coincidencias
+    return "sin grupo"
+
+def agrupar_por_grupo(variables, grupos_apartado=None):
+    """
+    Agrupa las variables por grupo respetando el ORDEN EXACTO definido en GRUPOS_APARTADOS.
+    """
+    grupos = defaultdict(list)
+
+    # Construir contenedor
+    for var in variables:
+        grupos[var["grupo"]].append(var)
+
+    grupos_finales = []
+
+    # 1. SIN GRUPO primero (si existe)
+    if "sin grupo" in grupos:
+        grupos_finales.append({
+            "grupo": "sin grupo",
+            "variables": grupos["sin grupo"]
+        })
+
+    # 2. Grupos definidos en el diccionario, EN EL ORDEN EXACTO
+    if grupos_apartado:
+        for g in grupos_apartado:
+            if g not in ("sin grupo", "migrante") and g in grupos:
+                grupos_finales.append({
+                    "grupo": g,
+                    "variables": grupos[g]
+                })
+
+    # 3. MIGRANTE al final (si existe)
+    if "migrante" in grupos:
+        grupos_finales.append({
+            "grupo": "migrante",
+            "variables": grupos["migrante"]
+        })
+
+    return grupos_finales
+
+
 
 
 # =========================
@@ -674,32 +989,6 @@ def medidas_disponibles(catalogo: str, cubo: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-from fastapi import Query, Depends
-from fastapi.responses import JSONResponse
-
-def ejecutar_mdx_members_axis0(conn, mdx: str):
-    """
-    Ejecuta MDX que regresa un SET en el eje 0 y extrae miembros y propiedades.
-    Compatible con Cellset COM (MSOLAP/ADOMD).
-    """
-    cs = conn.Execute(mdx)
-    axis = cs.Axes(0)
-
-    out = []
-    for pos in axis.Positions:
-        # normalmente hay 1 miembro por posición en axis 0
-        mem = pos.Members(0)
-        # Propiedades típicas
-        out.append({
-            "member_caption": getattr(mem, "Caption", None),
-            "member_name": getattr(mem, "Name", None),
-            "member_unique_name": getattr(mem, "UniqueName", None),
-            "level_number": getattr(getattr(mem, "Level", None), "LevelNumber", None),
-            "level_unique_name": getattr(getattr(mem, "Level", None), "UniqueName", None),
-            "member_key": None,  # a veces no viene por MDX axis; si lo necesitas, se puede pedir por PROPERTIES
-        })
-    return out
-
 @app.get("/debug_buscar_texto_en_variables", dependencies=[Depends(verify_token)])
 def debug_buscar_texto_en_variables(
     catalogo: str,
@@ -899,156 +1188,7 @@ def debug_buscar_texto_en_variables(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-from fastapi import Body, Depends
-from fastapi.responses import JSONResponse
 
-def ejecutar_mdx_members_axis0(conn, mdx: str):
-    """
-    Ejecuta MDX que regresa un SET en el eje 0 y extrae miembros.
-    Compatible con Cellset COM (MSOLAP/ADOMD).
-    """
-    cs = conn.Execute(mdx)
-    axis = cs.Axes(0)
-
-    out = []
-    for pos in axis.Positions:
-        mem = pos.Members(0)
-        lvl = getattr(mem, "Level", None)
-        out.append({
-            "member_caption": getattr(mem, "Caption", None),
-            "member_name": getattr(mem, "Name", None),
-            "member_unique_name": getattr(mem, "UniqueName", None),
-            "level_number": getattr(lvl, "LevelNumber", None),
-            "level_unique_name": getattr(lvl, "UniqueName", None),
-        })
-    return out
-
-def ejecutar_mdx_rows_execute(conn, mdx: str):
-    """
-    Ejecuta MDX y regresa rows como lista de dict.
-    Debe funcionar con el mismo conn que usas en ejecutar_query_rows_execute.
-    """
-    rs = conn.Execute(mdx)  # <- en tu caso regresa tuple, agarramos el recordset
-    # Algunos providers regresan (recordset, ) o (recordset, count)
-    recordset = rs[0] if isinstance(rs, tuple) else rs
-
-    # Armar columnas
-    cols = [recordset.Fields(i).Name for i in range(recordset.Fields.Count)]
-
-    out = []
-    while not recordset.EOF:
-        row = {}
-        for i, c in enumerate(cols):
-            row[c] = recordset.Fields(i).Value
-        out.append(row)
-        recordset.MoveNext()
-
-    return out
-
-from fastapi import Body, Depends
-from fastapi.responses import JSONResponse
-
-# -----------------------------
-# Helpers seguros para DMVs
-# -----------------------------
-def _sql_lit(s: str) -> str:
-    return (s or "").replace("'", "''")
-
-def resolver_caption_unico(conn, catalogo: str, cubo: str, member_unique_name: str):
-    """
-    Resuelve MEMBER_UNIQUE_NAME -> MEMBER_CAPTION / MEMBER_NAME con DMV.
-    Importante: SIN IN, SIN LIKE.
-    """
-    cat = _sql_lit(catalogo)
-    cube = _sql_lit(cubo)
-    mun = _sql_lit(member_unique_name)
-
-    q = f"""
-    SELECT TOP 1
-      [MEMBER_UNIQUE_NAME],
-      [MEMBER_CAPTION],
-      [MEMBER_NAME],
-      [LEVEL_NUMBER],
-      [LEVEL_UNIQUE_NAME]
-    FROM $system.MDSCHEMA_MEMBERS
-    WHERE [CATALOG_NAME] = '{cat}'
-      AND [CUBE_NAME] = '{cube}'
-      AND [MEMBER_UNIQUE_NAME] = '{mun}'
-    """
-    rows = ejecutar_query_rows_execute(conn, q) or []
-    return rows[0] if rows else None
-
-def resolver_captions_lista(conn, catalogo: str, cubo: str, unique_names: list[str]):
-    """
-    Resuelve varios unique_names -> caption, 1-por-1 (con cache).
-    """
-    cache = {}
-    out = {}
-    for un in unique_names:
-        un = (un or "").strip()
-        if not un:
-            continue
-        if un in cache:
-            out[un] = cache[un]
-            continue
-        info = resolver_caption_unico(conn, catalogo, cubo, un)
-        cache[un] = info
-        out[un] = info
-    return out
-
-def extraer_unique_names_de_rows_mdx(rows: list[dict]) -> list[str]:
-    """
-    Tus mdx rows llegan como:
-      [ { "<unique_name_1>": "cantidad", "<unique_name_2>": "cantidad", ... } ]
-    Extrae SOLO keys (unique_names).
-    """
-    uniq = []
-    seen = set()
-    for r in rows or []:
-        if not isinstance(r, dict):
-            continue
-        for k in r.keys():
-            k = (k or "").strip()
-            if not k or k in seen:
-                continue
-            seen.add(k)
-            uniq.append(k)
-    return uniq
-
-def pick_caption_by_level(ruta_detalle: list[dict], level_unique_name: str):
-    for r in ruta_detalle or []:
-        if (r.get("level_unique_name") or "").strip() == level_unique_name:
-            return r.get("member_caption")
-    return None
-
-def formatear_unidad_medica(ruta_detalle: list[dict], nombre_unidad: str, clue_input: str):
-    return {
-        "clues": pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[CLUES]") or clue_input,
-        "nombre_unidad": nombre_unidad,
-        "entidad": pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Entidad]"),
-        "jurisdiccion": pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Jurisdicción]"),
-        "municipio": pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Municipio]"),
-    }
-
-def ruta_detalle_desde_unique_names(unique_names: list[str], captions_map: dict) -> list[dict]:
-    """
-    Construye ruta_detalle (con level info) desde unique_names resueltos por DMV.
-    """
-    detalle = []
-    for un in unique_names:
-        info = captions_map.get(un) or {}
-        detalle.append({
-            "member_unique_name": un,
-            "member_caption": info.get("MEMBER_CAPTION") or info.get("MEMBER_NAME") or un,
-            "level_number": info.get("LEVEL_NUMBER"),
-            "level_unique_name": info.get("LEVEL_UNIQUE_NAME"),
-        })
-    return detalle
-
-
-# -----------------------------
-# ENDPOINT
-# -----------------------------
 @app.post("/unidad_medica_completa_por_clues", dependencies=[Depends(verify_token)])
 def unidad_medica_completa_por_clues(
     catalogo: str = Body(...),
@@ -1059,55 +1199,45 @@ def unidad_medica_completa_por_clues(
         catalogo = (catalogo or "").strip()
         cubo = (cubo or "").strip()
         clues_list = [c.strip().upper() for c in (clues_list or []) if (c or "").strip()]
+        if not clues_list:
+            return JSONResponse(status_code=400, content={"error": "clues_list viene vacío"})
 
         def consulta(conn):
-            cube = _sql_lit(cubo)
+            cube = sql_lit(cubo)
 
-            resultados = []
-            no_encontradas = []
+            resultados, no_encontradas = [], []
 
             for clue in clues_list:
-                clue_sql = _sql_lit(clue)
-
-                # CLUES en la jerarquía que tú quieres
+                clue_sql = mdx_key(clue)
                 clues_member = f"[DIM UNIDAD].[Unidad Médica].[CLUES].&[{clue_sql}]"
 
-                # Ruta hacia arriba (4->3->2->1->0)
                 mdx_ruta = f"""
-                WITH
-                SET [Ruta] AS {{
-                  {clues_member},
-                  {clues_member}.PARENT,
-                  {clues_member}.PARENT.PARENT,
-                  {clues_member}.PARENT.PARENT.PARENT,
-                  {clues_member}.PARENT.PARENT.PARENT.PARENT
+                WITH SET [Ruta] AS {{
+                    {clues_member},
+                    {clues_member}.PARENT,
+                    {clues_member}.PARENT.PARENT,
+                    {clues_member}.PARENT.PARENT.PARENT,
+                    {clues_member}.PARENT.PARENT.PARENT.PARENT
                 }}
-                SELECT
-                  [Ruta]
-                ON 0
+                SELECT [Ruta] ON 0
                 FROM [{cube}]
-                """
+                """.strip()
 
-                # Nombre unidad (nivel 5): hijos del CLUES
                 mdx_nombre = f"""
-                SELECT
-                  ( {clues_member} ).CHILDREN
-                ON 0
+                SELECT ( {clues_member} ).CHILDREN ON 0
                 FROM [{cube}]
-                """
+                """.strip()
 
                 try:
                     ruta_rows = ejecutar_query_rows_execute(conn, mdx_ruta) or []
                     if not ruta_rows:
-                        raise Exception("Ruta vacía: CLUES no existe en [DIM UNIDAD].[Unidad Médica].[CLUES] o no tiene padres.")
+                        raise Exception("Ruta vacía: CLUES no existe o no tiene padres.")
 
                     nombre_rows = ejecutar_query_rows_execute(conn, mdx_nombre) or []
 
-                    # 1) keys/unique_names (ignoramos cantidades)
-                    ruta_unique = extraer_unique_names_de_rows_mdx(ruta_rows)
-                    nombre_unique = extraer_unique_names_de_rows_mdx(nombre_rows)
+                    ruta_unique = mdx_rows_extract_unique_names(ruta_rows)
+                    nombre_unique = mdx_rows_extract_unique_names(nombre_rows)
 
-                    # 2) resolver captions por DMV (1x1) con cache
                     all_unique = []
                     seen = set()
                     for u in (ruta_unique + nombre_unique):
@@ -1115,36 +1245,21 @@ def unidad_medica_completa_por_clues(
                             seen.add(u)
                             all_unique.append(u)
 
-                    captions_map = resolver_captions_lista(conn, catalogo, cubo, all_unique)
+                    captions_map = dmv_member_info_many(conn, catalogo, cubo, all_unique, ejecutar_query_rows_execute)
+                    ruta_detalle = build_ruta_detalle(ruta_unique, captions_map)
 
-                    # 3) construir ruta_detalle con level info
-                    ruta_detalle = ruta_detalle_desde_unique_names(ruta_unique, captions_map)
-
-                    # 4) nombre de unidad (level 5) en texto
                     nombre_unidad = None
                     if nombre_unique:
-                        info = captions_map.get(nombre_unique[0])
-                        nombre_unidad = (info.get("MEMBER_CAPTION") or info.get("MEMBER_NAME") or nombre_unique[0]) if info else nombre_unique[0]
+                        info = captions_map.get(nombre_unique[0]) or {}
+                        nombre_unidad = info.get("MEMBER_CAPTION") or info.get("MEMBER_NAME") or nombre_unique[0]
 
-                    # 5) FORMATO FINAL QUE QUIERES
-                    unidad = formatear_unidad_medica(
-                        ruta_detalle=ruta_detalle,
-                        nombre_unidad=nombre_unidad,
-                        clue_input=clue
-                    )
+                    unidad = format_unidad_medica(ruta_detalle, nombre_unidad, clue)
 
-                    resultados.append({
-                        "found": True,
-                        **unidad
-                    })
+                    resultados.append({"found": True, **unidad})
 
                 except Exception as e:
                     no_encontradas.append(clue)
-                    resultados.append({
-                        "found": False,
-                        "clues": clue,
-                        "error": str(e),
-                    })
+                    resultados.append({"found": False, "clues": clue, "error": str(e)})
 
             return {
                 "catalogo": catalogo,
@@ -1152,7 +1267,414 @@ def unidad_medica_completa_por_clues(
                 "jerarquia_usada": "[DIM UNIDAD].[Unidad Médica]",
                 "total_clues": len(clues_list),
                 "clues_no_encontradas": no_encontradas,
-                "resultados": resultados,  # array listo con CLUES, NOMBRE, ENTIDAD, JURIS, MUNICIPIO
+                "resultados": resultados,
+            }
+
+        return ejecutar_conexion_olap(consulta, catalogo=catalogo)
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+
+@app.post("/total_por_clues_variables_por_texto", dependencies=[Depends(verify_token)])
+def total_por_clues_variables_por_texto(
+    catalogo: str = Body(...),
+    cubo: str = Body(...),
+    clues_list: list[str] = Body(...),
+    search_text: str = Body("APLICACIÓN DE BIOLÓGICOS"),
+    max_vars: int = Body(5000),
+    devolver_mdx: bool = Body(False),
+):
+    try:
+        catalogo = (catalogo or "").strip()
+        cubo = (cubo or "").strip()
+        search_text = (search_text or "").strip()
+        clues_list = [c.strip().upper() for c in (clues_list or []) if (c or "").strip()]
+
+        if not clues_list:
+            return JSONResponse(status_code=400, content={"error": "clues_list viene vacío"})
+        if not search_text:
+            return JSONResponse(status_code=400, content={"error": "search_text viene vacío"})
+        if not isinstance(max_vars, int) or max_vars <= 0:
+            return JSONResponse(status_code=400, content={"error": "max_vars debe ser entero > 0"})
+
+        def consulta(conn):
+            clues_literal = ",\n    ".join(
+                f"[DIM UNIDAD].[Unidad Médica].[CLUES].&[{mdx_key(c)}]"
+                for c in clues_list
+            )
+
+            needle = mdx_str(search_text).upper()
+
+            mdx = f"""
+WITH
+SET [S_Apartados] AS
+  FILTER(
+    [DIM VARIABLES].[Apartado y Variable].[Apartado].MEMBERS,
+    VBA!InStr(1, VBA!UCase([DIM VARIABLES].[Apartado y Variable].CURRENTMEMBER.NAME), "{needle}") > 0
+    OR VBA!InStr(1, VBA!UCase([DIM VARIABLES].[Apartado y Variable].CURRENTMEMBER.PROPERTIES("MEMBER_CAPTION")), "{needle}") > 0
+  )
+
+SET [S_VarsRaw] AS
+  GENERATE(
+    [S_Apartados],
+    DESCENDANTS([DIM VARIABLES].[Apartado y Variable].CURRENTMEMBER, 1)
+  )
+
+SET [S_Vars] AS
+  HEAD([S_VarsRaw], {int(max_vars)})
+
+SELECT
+  {{ [Measures].[Total] }} ON 0,
+  NON EMPTY [S_Vars] ON 1
+FROM (
+  SELECT
+    {{ {clues_literal} }} ON 0
+  FROM [{cubo}]
+)
+""".strip()
+
+            rows = ejecutar_query_rows_execute(conn, mdx) or []
+            resp = {
+                "catalogo": catalogo,
+                "cubo": cubo,
+                "search_text": search_text,
+                "total_clues": len(clues_list),
+                "max_vars": int(max_vars),
+                "rows": rows,
+            }
+            if devolver_mdx:
+                resp["mdx"] = mdx
+            return resp
+
+        return ejecutar_conexion_olap(consulta, catalogo=catalogo)
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/biologicos_por_clues_con_unidad22222", dependencies=[Depends(verify_token)])
+def biologicos_por_clues_con_unidad(
+    catalogo: str = Body(...),
+    cubo: str = Body(...),
+    clues_list: list[str] = Body(...),
+    search_text: str = Body("APLICACIÓN DE BIOLÓGICOS"),
+    max_vars: int = Body(5000),
+    incluir_ceros: bool = Body(True),
+):
+    try:
+        # -----------------------------
+        # Validación / normalización inputs
+        # -----------------------------
+        catalogo = (catalogo or "").strip()
+        cubo = (cubo or "").strip()
+        search_text = " ".join((search_text or "").strip().split())
+        clues_list = [c.strip().upper() for c in (clues_list or []) if c and c.strip()]
+
+        if not clues_list:
+            return JSONResponse(status_code=400, content={"error": "clues_list viene vacío"})
+        if not search_text:
+            return JSONResponse(status_code=400, content={"error": "search_text viene vacío"})
+        if not isinstance(max_vars, int) or max_vars <= 0:
+            return JSONResponse(status_code=400, content={"error": "max_vars debe ser entero > 0"})
+
+        def consulta(conn):
+            cat = sql_lit(catalogo)
+            cube = sql_lit(cubo)
+
+            # ============================================================
+            # A) Detectar level de CLUES (para armar set literal)
+            # ============================================================
+            q_levels = f"""
+            SELECT
+              [HIERARCHY_UNIQUE_NAME],
+              [LEVEL_UNIQUE_NAME],
+              [LEVEL_NAME],
+              [LEVEL_CAPTION],
+              [DIMENSION_UNIQUE_NAME]
+            FROM $system.MDSCHEMA_LEVELS
+            WHERE [CATALOG_NAME] = '{cat}'
+              AND [CUBE_NAME] = '{cube}'
+            """
+            level_rows = ejecutar_query_rows_execute(conn, q_levels) or []
+
+            clues_level = None
+            for r in level_rows:
+                lvl_cap = (r.get("LEVEL_CAPTION") or "").upper()
+                lvl_name = (r.get("LEVEL_NAME") or "").upper()
+                if "CLUES" in lvl_cap or "CLUES" in lvl_name:
+                    clues_level = {
+                        "hierarchy_unique_name": (r.get("HIERARCHY_UNIQUE_NAME") or "").strip(),
+                        "level_unique_name": (r.get("LEVEL_UNIQUE_NAME") or "").strip(),
+                        "dimension_unique_name": (r.get("DIMENSION_UNIQUE_NAME") or "").strip(),
+                    }
+                    break
+
+            if not clues_level or not clues_level["level_unique_name"]:
+                return {
+                    "catalogo": catalogo,
+                    "cubo": cubo,
+                    "error": "No se encontró un LEVEL de CLUES en este cubo.",
+                }
+
+            clues_level_un = clues_level["level_unique_name"]
+
+            # ============================================================
+            # B) Construir mapa de UNIDAD por CLUES
+            # ============================================================
+            def get_unidad_por_clue(clue: str) -> dict:
+                clue_sql = mdx_key(clue)
+
+                # OJO: si tu cubo usa otra jerarquía para unidad médica, ajusta aquí.
+                clues_member = f"[DIM UNIDAD].[Unidad Médica].[CLUES].&[{clue_sql}]"
+                cubo_safe = cubo.replace("]", "]]")
+
+                mdx_ruta = f"""
+                WITH SET [Ruta] AS {{
+                  {clues_member},
+                  {clues_member}.PARENT,
+                  {clues_member}.PARENT.PARENT,
+                  {clues_member}.PARENT.PARENT.PARENT,
+                  {clues_member}.PARENT.PARENT.PARENT.PARENT
+                }}
+                SELECT [Ruta] ON 0
+                FROM [{cubo_safe}]
+                """.strip()
+
+                mdx_nombre = f"""
+                SELECT ( {clues_member} ).CHILDREN ON 0
+                FROM [{cubo_safe}]
+                """.strip()
+
+                ruta_rows = ejecutar_query_rows_execute(conn, mdx_ruta) or []
+                if not ruta_rows:
+                    return {
+                        "nombre": None,
+                        "entidad": None,
+                        "jurisdiccion": None,
+                        "municipio": None,
+                        "idinstitucion": None,
+                    }
+
+                nombre_rows = ejecutar_query_rows_execute(conn, mdx_nombre) or []
+
+                ruta_unique = mdx_rows_extract_unique_names(ruta_rows)
+                nombre_unique = mdx_rows_extract_unique_names(nombre_rows)
+
+                all_unique = []
+                seen = set()
+                for u in (ruta_unique + nombre_unique):
+                    if u and u not in seen:
+                        seen.add(u)
+                        all_unique.append(u)
+
+                captions_map = dmv_member_info_many(conn, catalogo, cubo, all_unique, ejecutar_query_rows_execute)
+                ruta_detalle = build_ruta_detalle(ruta_unique, captions_map)
+
+                # nombre (nivel hijo del CLUES)
+                nombre = None
+                if nombre_unique:
+                    info = captions_map.get(nombre_unique[0]) or {}
+                    nombre = info.get("MEMBER_CAPTION") or info.get("MEMBER_NAME") or nombre_unique[0]
+
+                entidad = pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Entidad]")
+                jurisdiccion = pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Jurisdicción]")
+                municipio = pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Municipio]")
+
+                idinstitucion = (
+                    pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[IdInstitucion]")
+                    or pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[ID INSTITUCION]")
+                    or pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[Institución]")
+                    or pick_caption_by_level(ruta_detalle, "[DIM UNIDAD].[Unidad Médica].[IDINSTITUCION]")
+                )
+
+                return {
+                    "nombre": nombre,
+                    "entidad": entidad,
+                    "jurisdiccion": jurisdiccion,
+                    "municipio": municipio,
+                    "idinstitucion": idinstitucion,
+                }
+
+            unidad_por_clue: dict[str, dict] = {}
+            for clue in clues_list:
+                try:
+                    unidad_por_clue[clue] = get_unidad_por_clue(clue)
+                except Exception:
+                    unidad_por_clue[clue] = {
+                        "nombre": None,
+                        "entidad": None,
+                        "jurisdiccion": None,
+                        "municipio": None,
+                        "idinstitucion": None,
+                    }
+
+            # ============================================================
+            # C) MDX de biológicos (CLUES x Variables)
+            # ============================================================
+            needle = mdx_str(search_text).upper()
+            with_member = "MEMBER [Measures].[Total_0] AS COALESCEEMPTY([Measures].[Total], 0)" if incluir_ceros else ""
+            measure_member = "[Measures].[Total_0]" if incluir_ceros else "[Measures].[Total]"
+
+            clues_literal = ", ".join(f"{clues_level_un}.&[{mdx_key(c)}]" for c in clues_list)
+            cubo_safe = cubo.replace("]", "]]")
+
+            mdx_bio = f"""
+WITH
+{with_member}
+
+SET [S_Clues] AS {{ {clues_literal} }}
+
+SET [S_Apartados] AS
+  FILTER(
+    [DIM VARIABLES].[Apartado y Variable].[Apartado].MEMBERS,
+    VBA!InStr(1, VBA!UCase([DIM VARIABLES].[Apartado y Variable].CURRENTMEMBER.NAME), "{needle}") > 0
+    OR VBA!InStr(1, VBA!UCase([DIM VARIABLES].[Apartado y Variable].CURRENTMEMBER.PROPERTIES("MEMBER_CAPTION")), "{needle}") > 0
+  )
+
+SET [S_VarsRaw] AS
+  GENERATE([S_Apartados], DESCENDANTS([DIM VARIABLES].[Apartado y Variable].CURRENTMEMBER, 1))
+
+SET [S_Vars] AS HEAD([S_VarsRaw], {int(max_vars)})
+
+SELECT
+  {{ {measure_member} }} ON 0,
+  CROSSJOIN([S_Clues], [S_Vars]) DIMENSION PROPERTIES MEMBER_CAPTION ON 1
+FROM [{cubo_safe}]
+""".strip()
+
+            rows_raw = ejecutar_query_rows_execute(conn, mdx_bio) or []
+
+            # ============================================================
+            # D) Limpiar filas (keys feas) -> plano: {clues, apartado, variable, total}
+            # ============================================================
+            def get_by_suffix(row: dict, suffix: str):
+                suf = suffix.upper()
+                for k, v in row.items():
+                    if (k or "").upper().endswith(suf):
+                        return v
+                return None
+
+            def limpiar_row(row: dict) -> dict:
+                return {
+                    "clues": (
+                        get_by_suffix(row, "].[CLUES].[MEMBER_CAPTION]")
+                        or get_by_suffix(row, "].[CLUES].[CLUES].[MEMBER_CAPTION]")
+                    ),
+                    "apartado": get_by_suffix(row, "].[APARTADO].[MEMBER_CAPTION]"),
+                    "variable": get_by_suffix(row, "].[VARIABLE].[MEMBER_CAPTION]"),
+                    "total": get_by_suffix(row, "].[TOTAL_0]") or get_by_suffix(row, "].[TOTAL]"),
+                }
+
+            planos = [limpiar_row(r) for r in rows_raw]
+
+            # ============================================================
+            # E) Armar estructura:
+            #     resultados[clue].biologicos[apartado] = {"vars":[], "migrantes_total": 0}
+            # ============================================================
+            resultados_map = {
+                clue: {
+                    "clues": clue,
+                    "unidad": unidad_por_clue.get(clue) or {
+                        "nombre": None, "entidad": None, "jurisdiccion": None, "municipio": None, "idinstitucion": None
+                    },
+                    "biologicos": {},
+                }
+                for clue in clues_list
+            }
+
+            # NOTA: se espera que ya existan en tu código:
+            # - es_migrante(nombre_variable) -> bool
+            # - normalizar_apartado(nombre_apartado)
+            # - obtener_grupos_para_apartado(apartado_normalizado)
+            # - asignar_grupo(nombre_variable, grupos_apartado)
+            # - agrupar_por_grupo(vars_list, grupos_apartado)
+            # - extraer_edad_inicial(nombre_variable) -> int
+
+            for r in planos:
+                clue = (r.get("clues") or "").strip().upper()
+                apartado = (r.get("apartado") or "").strip()
+                variable = (r.get("variable") or "").strip()
+                total_raw = r.get("total")
+
+                if not clue or clue not in resultados_map:
+                    continue
+                if not apartado or not variable:
+                    continue
+
+                try:
+                    total = int(float(str(total_raw)))
+                except Exception:
+                    total = 0
+
+                bio = resultados_map[clue]["biologicos"]
+                if apartado not in bio:
+                    bio[apartado] = {"vars": [], "migrantes_total": 0}
+
+                # MIGRANTE: se suma a un solo total
+                if es_migrante(variable):
+                    bio[apartado]["migrantes_total"] += total
+                    continue
+
+                # Variables normales: asignar grupo
+                apartado_norm = normalizar_apartado(apartado)
+                grupos_apartado = obtener_grupos_para_apartado(apartado_norm)
+                grupo = asignar_grupo(variable, grupos_apartado)
+
+                bio[apartado]["vars"].append({
+                    "variable": variable,
+                    "total": total,
+                    "grupo": grupo
+                })
+
+            # ============================================================
+            # F) Convertir a lista final:
+            #     - Agregar TOTAL MIGRANTES como variable con grupo migrante
+            #     - Ordenar: migrante al final + edad + nombre
+            #     - Agrupar por grupo en el orden de negocio
+            # ============================================================
+            resultados = []
+            for clue in clues_list:
+                item = resultados_map[clue]
+                biologicos_list = []
+
+                for apartado, data in item["biologicos"].items():
+                    vars_list = data["vars"]
+
+                    # Agregar variable "TOTAL MIGRANTES" con grupo migrante (para no romper 'grupo')
+                    if data["migrantes_total"] != 0 or incluir_ceros:
+                        vars_list.append({
+                            "variable": f"TOTAL DE VACUNAS APLICADAS A MIGRANTES - {apartado}",
+                            "total": data["migrantes_total"],
+                            "grupo": "migrante"
+                        })
+
+                    apartado_norm = normalizar_apartado(apartado)
+                    grupos_apartado = obtener_grupos_para_apartado(apartado_norm)
+
+                    # Orden global antes de agrupar (migrante SIEMPRE al final)
+                    vars_list.sort(key=lambda v: (
+                        1 if (v.get("grupo") == "migrante") else 0,
+                        extraer_edad_inicial(v.get("variable") or ""),
+                        (v.get("variable") or "").upper()
+                    ))
+
+                    variables_agrupadas = agrupar_por_grupo(vars_list, grupos_apartado)
+
+                    biologicos_list.append({
+                        "apartado": apartado,
+                        "grupos": variables_agrupadas
+                    })
+
+                item["biologicos"] = biologicos_list
+                resultados.append(item)
+
+            return {
+                "catalogo": catalogo,
+                "cubo": cubo,
+                "resultados": resultados,
+                "clues_detectado": clues_level,  # opcional (debug)
             }
 
         return ejecutar_conexion_olap(consulta, catalogo=catalogo)

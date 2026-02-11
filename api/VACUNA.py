@@ -73,49 +73,6 @@ def sql_lit(s: str) -> str:
     """Escapa comillas simples para DMVs ($system.*)."""
     return (s or "").replace("'", "''").strip()
 
-def dmv_member_info(conn, catalogo: str, cubo: str, member_unique_name: str, ejecutar_query_rows_execute) -> dict | None:
-    cat = sql_lit(catalogo)
-    cube = sql_lit(cubo)
-    mun = sql_lit(member_unique_name)
-
-    q = f"""
-    SELECT TOP 1
-        [MEMBER_UNIQUE_NAME],
-        [MEMBER_CAPTION],
-        [MEMBER_NAME],
-        [LEVEL_NUMBER],
-        [LEVEL_UNIQUE_NAME]
-    FROM $system.MDSCHEMA_MEMBERS
-    WHERE [CATALOG_NAME] = '{cat}'
-        AND [CUBE_NAME] = '{cube}'
-        AND [MEMBER_UNIQUE_NAME] = '{mun}'
-    """
-    rows = ejecutar_query_rows_execute(conn, q) or []
-    return rows[0] if rows else None
-
-DIMENSIONES_POR_ANIO = {
-    2019: {"unidad_base": "[Clues].[Unidad médica]",    "vars_base": "[Variable].[Apartado y variable]"},
-    2020: {"unidad_base": "[DIM_UNIDADES].[Unidad Médica]",    "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
-    2021: {"unidad_base": "[DIM_UNIDADES].[Unidad Médica]",    "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
-    2022: {"unidad_base": "[DIM UNIDADES].[Unidad Médica]",    "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
-    2023: {"unidad_base": "[DIM UNIDAD].[Unidad Médica]",      "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
-    2024: {"unidad_base": "[DIM UNIDAD].[Unidad Médica]",      "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
-    2025: {"unidad_base": "[DIM UNIDADES2025].[Unidad Médica]","vars_base": "[DIM VARIABLES2025].[Apartado y Variable]"},
-}
-
-def detectar_anio(catalogo: str, cubo: str) -> int:
-    txt = f"{catalogo or ''} {cubo or ''}"
-    m = re.search(r"(19|20)\d{2}", txt)
-    if not m:
-        raise ValueError("No pude detectar el año desde catalogo/cubo")
-    return int(m.group(0))
-
-def get_bases_por_anio(catalogo: str, cubo: str) -> dict:
-    anio = detectar_anio(catalogo, cubo)
-    cfg = DIMENSIONES_POR_ANIO.get(anio)
-    if not cfg:
-        raise ValueError(f"No hay configuración para el año {anio}")
-    return cfg
 
 def ejecutar_query_rows_execute(conn, query: str):
     """
@@ -145,8 +102,8 @@ def ejecutar_query_rows_execute(conn, query: str):
             pass
 
 def mdx_key(s: str) -> str:
-    """Para armar .&[KEY]. (escapa ])"""
-    return (s or "").strip().replace("]", "]]")
+    """Para armar .&[KEY]."""
+    return (s or "").strip()
 
 def mdx_rows_extract_unique_names(rows: list[dict]) -> list[str]:
     """
@@ -163,6 +120,42 @@ def mdx_rows_extract_unique_names(rows: list[dict]) -> list[str]:
                 seen.add(k)
                 uniq.append(k)
     return uniq
+
+def dmv_member_info(conn, catalogo: str, cubo: str, member_unique_name: str, ejecutar_query_rows_execute) -> dict | None:
+    cat = sql_lit(catalogo)
+    cube = sql_lit(cubo)
+    mun = sql_lit(member_unique_name)
+
+    q = f"""
+    SELECT TOP 1
+      [MEMBER_UNIQUE_NAME],
+      [MEMBER_CAPTION],
+      [MEMBER_NAME],
+      [LEVEL_NUMBER],
+      [LEVEL_UNIQUE_NAME]
+    FROM $system.MDSCHEMA_MEMBERS
+    WHERE [CATALOG_NAME] = '{cat}'
+      AND [CUBE_NAME] = '{cube}'
+      AND [MEMBER_UNIQUE_NAME] = '{mun}'
+    """
+    rows = ejecutar_query_rows_execute(conn, q) or []
+    return rows[0] if rows else None
+
+
+def dmv_member_info_many(conn, catalogo: str, cubo: str, unique_names: list[str], ejecutar_query_rows_execute) -> dict[str, dict | None]:
+    """
+    Resuelve unique_names -> info (cache en memoria por llamada).
+    """
+    cache: dict[str, dict | None] = {}
+    out: dict[str, dict | None] = {}
+    for un in unique_names:
+        un = (un or "").strip()
+        if not un:
+            continue
+        if un not in cache:
+            cache[un] = dmv_member_info(conn, catalogo, cubo, un, ejecutar_query_rows_execute)
+        out[un] = cache[un]
+    return out
 
 def build_ruta_detalle(unique_names: list[str], captions_map: dict[str, dict | None]) -> list[dict]:
     detalle = []
@@ -183,10 +176,6 @@ def pick_caption_by_level(ruta_detalle: list[dict], level_unique_name: str) -> s
             return r.get("member_caption")
     return None
 
-def mdx_str(s: str) -> str:
-    """Escapa comillas dobles para meter texto en ' "..." ' dentro de MDX."""
-    return (s or "").replace('"', '""').strip()
-
 def _norm_txt(s: str) -> str:
     s = (s or "").strip().upper()
     s = "".join(
@@ -195,11 +184,16 @@ def _norm_txt(s: str) -> str:
     )
     return " ".join(s.split())
 
+def mdx_str(s: str) -> str:
+    """Escapa comillas dobles para meter texto en ' "..." ' dentro de MDX."""
+    return (s or "").replace('"', '""').strip()
+
 def es_migrante(nombre_variable: str) -> bool:
     return "MIGRANTE" in _norm_txt(nombre_variable)
 
+
 def normalizar_apartado(nombre):
-    nombre = (nombre or "").upper()
+    nombre = nombre.upper()
     nombre = nombre.replace("Ó", "O").replace("Í", "I").replace("É", "E").replace("Á", "A").replace("Ú", "U")
     nombre = nombre.replace("  ", " ")
     nombre = nombre.strip()
@@ -260,9 +254,9 @@ def obtener_grupos_para_apartado(apartado_nombre):
 def asignar_grupo(nombre_variable: str, grupos_apartado: list) -> str:
     """
     Asigna el grupo correcto según:
-        - Si contiene la palabra MIGRANTE → 'migrante'
-        - Si contiene parcialmente el texto de un grupo → ese grupo
-        - Si no coincide con ningún grupo → 'sin grupo'
+      - Si contiene la palabra MIGRANTE → 'migrante'
+      - Si contiene parcialmente el texto de un grupo → ese grupo
+      - Si no coincide con ningún grupo → 'sin grupo'
     """
 
     nombre = nombre_variable.upper()
@@ -279,6 +273,8 @@ def asignar_grupo(nombre_variable: str, grupos_apartado: list) -> str:
 
     # 3. Sin coincidencias
     return "sin grupo"
+
+
 
 def extraer_edad_inicial(nombre_variable: str) -> int:
     nombre = nombre_variable.upper()
@@ -353,18 +349,106 @@ def agrupar_por_grupo(variables, grupos_apartado=None):
 
     return grupos_finales
 
-INSTITUCION_POR_PREFIJO = {
-    "HGIMB": "IMB",
-    "HGSSA": "SSA",
+
+DIMENSIONES_POR_ANIO = {
+    2020: {
+        "unidad_dim": "[DIM_UNIDADES]",
+        "unidad_hier": "[Unidad Médica]",
+        "vars_dim": "[DIM VARIABLES]",
+        "vars_hier": "[Apartado y Variable]",
+    },
+    2021: {
+        "unidad_dim": "[DIM_UNIDADES]",
+        "unidad_hier": "[Unidad Médica]",
+        "vars_dim": "[DIM VARIABLES]",
+        "vars_hier": "[Apartado y Variable]",
+    },
+    2022: {
+        "unidad_dim": "[DIM UNIDADES]",
+        "unidad_hier": "[Unidad Médica]",
+        "vars_dim": "[DIM VARIABLES]",
+        "vars_hier": "[Apartado y Variable]",
+    },
+    2023: {
+        "unidad_dim": "[DIM UNIDAD]",
+        "unidad_hier": "[Unidad Médica]",
+        "vars_dim": "[DIM VARIABLES]",
+        "vars_hier": "[Apartado y Variable]",
+    },
+    2024: {
+        "unidad_dim": "[DIM UNIDAD]",
+        "unidad_hier": "[Unidad Médica]",
+        "vars_dim": "[DIM VARIABLES]",
+        "vars_hier": "[Apartado y Variable]",
+    },
+    2025: {
+        "unidad_dim": "[DIM UNIDADES2025]",
+        "unidad_hier": "[Unidad Médica]",
+        "vars_dim": "[DIM VARIABLES2025]",
+        "vars_hier": "[Apartado y Variable]",
+    },
 }
 
-def detectar_institucion_por_clues(clues: str) -> str | None:
-    c = (clues or "").strip().upper()
-    if len(c) < 5:
-        return None
-    pref = c[:5]
-    return INSTITUCION_POR_PREFIJO.get(pref)
 
+def detectar_anio(catalogo: str, cubo: str) -> int:
+    """
+    Detecta año desde textos tipo: SIS_2024, Cubo solo sinba 2022, etc.
+    """
+    txt = f"{catalogo or ''} {cubo or ''}"
+    m = re.search(r"(19|20)\d{2}", txt)
+    if not m:
+        raise ValueError("No pude detectar el año desde catalogo/cubo")
+    return int(m.group(0))
+
+def get_dims_por_anio(catalogo: str, cubo: str) -> dict:
+    anio = detectar_anio(catalogo, cubo)
+    dims = DIMENSIONES_POR_ANIO.get(anio)
+    if not dims:
+        raise ValueError(f"No hay configuración de dimensiones para el año {anio}")
+    return dims
+
+DIMENSIONES_POR_ANIO = {
+    2019: {"unidad_base": "[Clues].[Unidad médica]",    "vars_base": "[Variable].[Apartado y variable]"},
+    2020: {"unidad_base": "[DIM_UNIDADES].[Unidad Médica]",    "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2021: {"unidad_base": "[DIM_UNIDADES].[Unidad Médica]",    "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2022: {"unidad_base": "[DIM UNIDADES].[Unidad Médica]",    "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2023: {"unidad_base": "[DIM UNIDAD].[Unidad Médica]",      "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2024: {"unidad_base": "[DIM UNIDAD].[Unidad Médica]",      "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2025: {"unidad_base": "[DIM UNIDADES2025].[Unidad Médica]","vars_base": "[DIM VARIABLES2025].[Apartado y Variable]"},
+}
+
+def detectar_anio(catalogo: str, cubo: str) -> int:
+    txt = f"{catalogo or ''} {cubo or ''}"
+    m = re.search(r"(19|20)\d{2}", txt)
+    if not m:
+        raise ValueError("No pude detectar el año desde catalogo/cubo")
+    return int(m.group(0))
+
+def get_bases_por_anio(catalogo: str, cubo: str) -> dict:
+    anio = detectar_anio(catalogo, cubo)
+    cfg = DIMENSIONES_POR_ANIO.get(anio)
+    if not cfg:
+        raise ValueError(f"No hay configuración para el año {anio}")
+    return cfg
+
+def dmv_member_info_many_cached(
+    conn,
+    catalogo: str,
+    cubo: str,
+    unique_names: list[str],
+    cache: dict[str, dict | None],
+) -> dict[str, dict | None]:
+    # ❌ ESTABA MAL: llamabas dmv_member_info(conn, catalogo, cubo, un) sin pasar ejecutar_query_rows_execute
+    # ✅ CORRECTO:
+    out: dict[str, dict | None] = {}
+    for un in unique_names or []:
+        un = (un or "").strip()
+        if not un:
+            continue
+        if un not in cache:
+            cache[un] = dmv_member_info(conn, catalogo, cubo, un, ejecutar_query_rows_execute)
+        out[un] = cache[un]
+    return out
 
 @app.get("/cubos_sis_estandarizados", dependencies=[Depends(verify_token)])
 def cubos_sis_estandarizados():
@@ -401,6 +485,15 @@ def cubos_sis_estandarizados():
         return JSONResponse(status_code=500, content={"error": "Error interno"})
 
 
+
+
+# ------------------------------------------------------------
+# Endpoint principal: Biológicos por CLUES con info de unidad médica
+# ------------------------------------------------------------
+# ------------------------------------------------------------
+# Endpoint principal: Biológicos por CLUES con info de unidad médica
+# (VERSIÓN COMPLETA CORREGIDA: cache DMV + firma correcta de dmv_member_info)
+# ------------------------------------------------------------
 @app.post("/biologicos_por_clues_con_unidad22222", dependencies=[Depends(verify_token)])
 def biologicos_por_clues_con_unidad(
     catalogo: str = Body(...),
@@ -474,11 +567,11 @@ def biologicos_por_clues_con_unidad(
 
                 mdx_ruta = f"""
                 WITH SET [Ruta] AS {{
-                    {clues_member},
-                    {clues_member}.PARENT,
-                    {clues_member}.PARENT.PARENT,
-                    {clues_member}.PARENT.PARENT.PARENT,
-                    {clues_member}.PARENT.PARENT.PARENT.PARENT
+                  {clues_member},
+                  {clues_member}.PARENT,
+                  {clues_member}.PARENT.PARENT,
+                  {clues_member}.PARENT.PARENT.PARENT,
+                  {clues_member}.PARENT.PARENT.PARENT.PARENT
                 }}
                 SELECT [Ruta] ON 0
                 FROM [{cubo_safe}]
@@ -495,7 +588,8 @@ def biologicos_por_clues_con_unidad(
                         "nombre": None,
                         "entidad": None,
                         "jurisdiccion": None,
-                        "municipio": None
+                        "municipio": None,
+                        "idinstitucion": None,
                     }
 
                 nombre_rows = ejecutar_query_rows_execute(conn, mdx_nombre) or []
@@ -524,12 +618,15 @@ def biologicos_por_clues_con_unidad(
                 jurisdiccion = pick_caption_by_level(ruta_detalle, LVL_JURIS)
                 municipio = pick_caption_by_level(ruta_detalle, LVL_MUN)
 
+                # En tus niveles no aparece IdInstitucion; si existe en otros cubos, lo puedes agregar aquí
+                idinstitucion = None
 
                 return {
                     "nombre": nombre,
                     "entidad": entidad,
                     "jurisdiccion": jurisdiccion,
                     "municipio": municipio,
+                    "idinstitucion": idinstitucion,
                 }
 
             unidad_por_clue: dict[str, dict] = {}
@@ -542,6 +639,7 @@ def biologicos_por_clues_con_unidad(
                         "entidad": None,
                         "jurisdiccion": None,
                         "municipio": None,
+                        "idinstitucion": None,
                         "_error": str(e),  # para debug
                     }
 
@@ -557,14 +655,14 @@ def biologicos_por_clues_con_unidad(
             cube = sql_lit(cubo)
             q_levels = f"""
             SELECT
-                [HIERARCHY_UNIQUE_NAME],
-                [LEVEL_UNIQUE_NAME],
-                [LEVEL_NAME],
-                [LEVEL_CAPTION],
-                [DIMENSION_UNIQUE_NAME]
+              [HIERARCHY_UNIQUE_NAME],
+              [LEVEL_UNIQUE_NAME],
+              [LEVEL_NAME],
+              [LEVEL_CAPTION],
+              [DIMENSION_UNIQUE_NAME]
             FROM $system.MDSCHEMA_LEVELS
             WHERE [CATALOG_NAME] = '{cat}'
-                AND [CUBE_NAME] = '{cube}'
+              AND [CUBE_NAME] = '{cube}'
             """
             level_rows = ejecutar_query_rows_execute(conn, q_levels) or []
 
@@ -601,20 +699,20 @@ WITH
 SET [S_Clues] AS {{ {clues_literal} }}
 
 SET [S_Apartados] AS
-    FILTER(
+  FILTER(
     {apartado_members},
     VBA!InStr(1, VBA!UCase({hier_current}.NAME), "{needle}") > 0
     OR VBA!InStr(1, VBA!UCase({hier_current}.PROPERTIES("MEMBER_CAPTION")), "{needle}") > 0
-    )
+  )
 
 SET [S_VarsRaw] AS
-    GENERATE([S_Apartados], DESCENDANTS({hier_current}, 1))
+  GENERATE([S_Apartados], DESCENDANTS({hier_current}, 1))
 
 SET [S_Vars] AS HEAD([S_VarsRaw], {int(max_vars)})
 
 SELECT
-    {{ {measure_member} }} ON 0,
-    CROSSJOIN([S_Clues], [S_Vars]) DIMENSION PROPERTIES MEMBER_CAPTION ON 1
+  {{ {measure_member} }} ON 0,
+  CROSSJOIN([S_Clues], [S_Vars]) DIMENSION PROPERTIES MEMBER_CAPTION ON 1
 FROM [{cubo_safe}]
 """.strip()
 
@@ -647,24 +745,9 @@ FROM [{cubo_safe}]
             # D) ARMAR RESULTADOS
             # ============================================================
             resultados_map = {
-                clue: {
-                    "clues": clue,
-                    "unidad": {
-                        **(unidad_por_clue.get(clue) or {
-                            "nombre": None,
-                            "entidad": None,
-                            "jurisdiccion": None,
-                            "municipio": None,
-                            "institucion": None,
-                        }),
-                        # 👇 aquí lo calculas desde el CLUES
-                        "institucion": detectar_institucion_por_clues(clue),
-                    },
-                    "biologicos": {},
-                }
+                clue: {"clues": clue, "unidad": unidad_por_clue.get(clue), "biologicos": {}}
                 for clue in clues_list
             }
-
 
             for r in planos:
                 clue = (r.get("clues") or "").strip().upper()
