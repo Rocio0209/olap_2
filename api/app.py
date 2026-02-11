@@ -401,7 +401,7 @@ def cubos_sis_estandarizados():
         return JSONResponse(status_code=500, content={"error": "Error interno"})
 
 
-@app.post("/biologicos_por_clues_con_unidad22222", dependencies=[Depends(verify_token)])
+@app.post("/biologicos_por_clues_con_unidad", dependencies=[Depends(verify_token)])
 def biologicos_por_clues_con_unidad(
     catalogo: str = Body(...),
     cubo: str = Body(...),
