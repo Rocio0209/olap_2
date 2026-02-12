@@ -61,7 +61,15 @@ class BiologicosController extends Controller
                     'message' => 'No hay CLUES para consultar.',
                 ],
                 'table' => [
-                    'header_levels' => $this->defaultHeaderLevels(),
+                    'fixed_columns' => [
+                        ['key' => 'clues', 'label' => 'CLUES'],
+                        ['key' => 'unidad_nombre', 'label' => 'Unidad'],
+                        ['key' => 'entidad', 'label' => 'Entidad'],
+                        ['key' => 'jurisdiccion', 'label' => 'Jurisdicción'],
+                        ['key' => 'municipio', 'label' => 'Municipio'],
+                        ['key' => 'institucion', 'label' => 'Institución'],
+                    ],
+                    'apartados' => [],
                     'rows' => [],
                 ],
             ]);
@@ -95,10 +103,24 @@ class BiologicosController extends Controller
             'ok' => true,
             'summary' => $summary,
             'table' => [
-                'header_levels' => $this->defaultHeaderLevels(),
+                // ✅ columnas fijas (las 6 primeras)
+                'fixed_columns' => [
+                    ['key' => 'clues', 'label' => 'CLUES'],
+                    ['key' => 'unidad_nombre', 'label' => 'Unidad'],
+                    ['key' => 'entidad', 'label' => 'Entidad'],
+                    ['key' => 'jurisdiccion', 'label' => 'Jurisdicción'],
+                    ['key' => 'municipio', 'label' => 'Municipio'],
+                    ['key' => 'institucion', 'label' => 'Institución'],
+                ],
+
+                // ✅ apartados + variables (para headers tipo Excel)
+                'apartados' => $this->buildApartadosDefinition($apiResponse),
+
+                // ✅ filas (con JSON anidado por apartado)
                 'rows' => $previewRows,
             ],
         ]);
+
     }
 
     /**
@@ -209,5 +231,38 @@ class BiologicosController extends Controller
         $text = preg_replace('/[^a-z0-9]+/u', '_', $text);
         return trim($text, '_');
     }
+
+    private function buildApartadosDefinition(array $apiResponse): array
+{
+    $resultados = $apiResponse['resultados'] ?? [];
+    $first = $resultados[0] ?? null;
+    if (!$first) return [];
+
+    $apartados = [];
+
+    foreach (($first['biologicos'] ?? []) as $apartado) {
+        $apartadoLabel = (string) ($apartado['apartado'] ?? 'SIN_APARTADO');
+        $apartadoKey = $this->makeKey($apartadoLabel);
+
+        $vars = [];
+        foreach (($apartado['grupos'] ?? []) as $grupo) {
+            foreach (($grupo['variables'] ?? []) as $var) {
+                $varLabel = (string) ($var['variable'] ?? 'SIN_VARIABLE');
+                $varKey = $this->makeKey($varLabel);
+
+                // evitar duplicados si viene en varios grupos
+                $vars[$varKey] = ['key' => $varKey, 'label' => $varLabel];
+            }
+        }
+
+        $apartados[] = [
+            'key' => $apartadoKey,
+            'label' => $apartadoLabel,
+            'variables' => array_values($vars),
+        ];
+    }
+
+    return $apartados;
+}
 
 }
