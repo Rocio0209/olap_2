@@ -524,7 +524,6 @@ def biologicos_por_clues_con_unidad(
                 jurisdiccion = pick_caption_by_level(ruta_detalle, LVL_JURIS)
                 municipio = pick_caption_by_level(ruta_detalle, LVL_MUN)
 
-
                 return {
                     "nombre": nombre,
                     "entidad": entidad,
@@ -664,7 +663,6 @@ FROM [{cubo_safe}]
                 }
                 for clue in clues_list
             }
-
 
             for r in planos:
                 clue = (r.get("clues") or "").strip().upper()

@@ -19,6 +19,7 @@ use App\Http\Controllers\UnidadesController;
 use App\Http\Controllers\UsersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentacionDesarrolloController;
+use App\Http\Controllers\BiologicosController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -128,4 +129,7 @@ Route::middleware([
 
     /* Route Documentación */
     Route::get('/documentacion_desarrollo', [DocumentacionDesarrolloController::class, 'index'])->name('documentacion.index');
+
+    /* Route Biológicos */
+    Route::get('/vacunas/biologicos', [BiologicosController::class, 'index'])->name('vacunas.biologicos.index');
 });

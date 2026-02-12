@@ -3,6 +3,9 @@ import './bootstrap';
 import jQuery from 'jquery';
 window.$ = jQuery;
 
+//Vacunas
+import './vacunas/biologicos-preview.js';
+
 import * as bootstrap from 'bootstrap';
 
 //Datatables
