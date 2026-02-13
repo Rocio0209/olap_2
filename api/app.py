@@ -365,6 +365,28 @@ def detectar_institucion_por_clues(clues: str) -> str | None:
     pref = c[:5]
     return INSTITUCION_POR_PREFIJO.get(pref)
 
+def limpiar_nombre_unidad(nombre: str) -> str | None:
+    """
+    Quita segmentos tipo:
+      '... JURISDICCIÓN ...'
+      '... JURISDICCION ...'
+    y también limpia separadores comunes.
+    """
+    if not nombre:
+        return None
+
+    s = " ".join(str(nombre).split()).strip()
+
+    # corta desde "JURISDICCIÓN/JURISDICCION" hasta el final
+    s = re.sub(r"\s*[-–|:/,]*\s*JURISDICCI[ÓO]N\b.*$", "", s, flags=re.IGNORECASE)
+
+    # por si viene al inicio (raro)
+    s = re.sub(r"^JURISDICCI[ÓO]N\b.*$", "", s, flags=re.IGNORECASE)
+
+    s = s.strip(" -–|:/,")
+    return s or None
+
+
 
 @app.get("/cubos_sis_estandarizados", dependencies=[Depends(verify_token)])
 def cubos_sis_estandarizados():
@@ -735,6 +757,142 @@ FROM [{cubo_safe}]
                 "vars_base": vars_base,
                 "resultados": resultados,
                 "clues_detectado": clues_level,  # debug opcional
+            }
+
+        return ejecutar_conexion_olap(consulta, catalogo=catalogo)
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/clues_y_nombre_unidad_por_estado", dependencies=[Depends(verify_token)])
+def clues_y_nombre_unidad_por_estado(
+    catalogo: str = Body(...),
+    cubo: str = Body(...),
+    estado: str = Body("HIDALGO"),
+    max_clues: int = Body(50000),
+):
+    try:
+        catalogo = (catalogo or "").strip()
+        cubo = (cubo or "").strip()
+        estado = " ".join((estado or "").strip().split())
+
+        cfg = get_bases_por_anio(catalogo, cubo)
+        unidad_base = cfg["unidad_base"]  # jerarquía
+
+        LVL_ENTIDAD = f"{unidad_base}.[Entidad]"
+        LVL_CLUES   = f"{unidad_base}.[CLUES]"
+        LVL_NOMBRE  = f"{unidad_base}.[Nombre de la Unidad Médica]"  # <-- level 5
+
+        def consulta(conn):
+            cubo_safe = cubo.replace("]", "]]")
+
+            def get_by_suffix(row: dict, suffix: str):
+                suf = suffix.upper()
+                for k, v in (row or {}).items():
+                    if (k or "").upper().endswith(suf):
+                        return v
+                return None
+
+            # 1) Entidades (ON 1 para Recordset)
+            mdx_entidades = f"""
+SELECT
+    {{ [Measures].DEFAULTMEMBER }} ON 0,
+    {LVL_ENTIDAD}.MEMBERS
+        DIMENSION PROPERTIES MEMBER_CAPTION, MEMBER_UNIQUE_NAME
+    ON 1
+FROM [{cubo_safe}]
+""".strip()
+
+            entidad_rows = ejecutar_query_rows_execute(conn, mdx_entidades) or []
+            entidades = []
+            for r in entidad_rows:
+                cap = (get_by_suffix(r, "].[ENTIDAD].[MEMBER_CAPTION]") or "").strip()
+                un  = (get_by_suffix(r, "].[ENTIDAD].[MEMBER_UNIQUE_NAME]") or "").strip()
+                if cap and un:
+                    entidades.append({"caption": cap, "unique_name": un})
+
+            needle = _norm_txt(estado)
+            matches = [e for e in entidades if needle in _norm_txt(e["caption"])]
+            if not matches:
+                return {
+                    "catalogo": catalogo,
+                    "cubo": cubo,
+                    "anio_detectado": detectar_anio(catalogo, cubo),
+                    "estado": estado,
+                    "total": 0,
+                    "data": [],
+                    "error": "No encontré match del estado en el nivel Entidad.",
+                    "debug_entidades_ejemplo": [e["caption"] for e in entidades[:40]],
+                }
+
+            entidad_un = matches[0]["unique_name"]
+            entidad_caption = matches[0]["caption"]
+
+            # 2) CLUES + nombre (descendiente al level NOMBRE)
+            mdx = f"""
+WITH
+SET [S_CluesRaw] AS DESCENDANTS( {entidad_un}, {LVL_CLUES} )
+SET [S_Clues] AS HEAD([S_CluesRaw], {int(max_clues)})
+
+MEMBER [Measures].[NOMBRE_UNIDAD] AS
+    IIF(
+        DESCENDANTS({unidad_base}.CURRENTMEMBER, {LVL_NOMBRE}).COUNT > 0,
+        DESCENDANTS({unidad_base}.CURRENTMEMBER, {LVL_NOMBRE}).ITEM(0).PROPERTIES("MEMBER_CAPTION"),
+        NULL
+    )
+
+SELECT
+    {{ [Measures].[NOMBRE_UNIDAD] }} ON 0,
+    [S_Clues]
+        DIMENSION PROPERTIES MEMBER_CAPTION, MEMBER_UNIQUE_NAME
+    ON 1
+FROM [{cubo_safe}]
+""".strip()
+
+            rows = ejecutar_query_rows_execute(conn, mdx) or []
+
+            data = []
+            seen = set()
+            for r in rows:
+                clue = (
+                    get_by_suffix(r, "].[CLUES].[MEMBER_CAPTION]")
+                    or get_by_suffix(r, "].[CLUES].[CLUES].[MEMBER_CAPTION]")
+                )
+                clue = (clue or "").strip().upper()
+                if not clue or clue in seen:
+                    continue
+                seen.add(clue)
+
+                # OJO: la columna suele venir como [Measures].[NOMBRE_UNIDAD]
+                nombre_unidad = (
+                    get_by_suffix(r, "].[NOMBRE_UNIDAD]")
+                    or get_by_suffix(r, "NOMBRE_UNIDAD")
+                )
+                nombre_unidad = (nombre_unidad or "").strip() or None
+                nombre_unidad = limpiar_nombre_unidad(nombre_unidad)
+
+                # 🚫 Filtrar todo lo que sea jurisdicción
+                if not nombre_unidad:
+                    continue
+
+                if "JURISDICCI" in nombre_unidad.upper():
+                    continue
+
+                data.append({
+                    "clues": clue,
+                    "nombre_unidad": nombre_unidad
+                })
+
+            return {
+                "catalogo": catalogo,
+                "cubo": cubo,
+                "anio_detectado": detectar_anio(catalogo, cubo),
+                "estado": estado,
+                "entidad_encontrada": entidad_caption,
+                "total": len(data),
+                "data": data,
+                "jerarquia_unique_name": unidad_base,
+                "nivel_nombre": LVL_NOMBRE,
             }
 
         return ejecutar_conexion_olap(consulta, catalogo=catalogo)

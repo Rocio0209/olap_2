@@ -600,7 +600,29 @@ def agrupar_por_grupo(variables, grupos_apartado=None):
 
     return grupos_finales
 
+DIMENSIONES_POR_ANIO = {
+    2019: {"unidad_base": "[Clues].[Unidad médica]",    "vars_base": "[Variable].[Apartado y variable]"},
+    2020: {"unidad_base": "[DIM_UNIDADES].[Unidad Médica]",    "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2021: {"unidad_base": "[DIM_UNIDADES].[Unidad Médica]",    "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2022: {"unidad_base": "[DIM UNIDADES].[Unidad Médica]",    "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2023: {"unidad_base": "[DIM UNIDAD].[Unidad Médica]",      "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2024: {"unidad_base": "[DIM UNIDAD].[Unidad Médica]",      "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
+    2025: {"unidad_base": "[DIM UNIDADES2025].[Unidad Médica]","vars_base": "[DIM VARIABLES2025].[Apartado y Variable]"},
+}
 
+def detectar_anio(catalogo: str, cubo: str) -> int:
+    txt = f"{catalogo or ''} {cubo or ''}"
+    m = re.search(r"(19|20)\d{2}", txt)
+    if not m:
+        raise ValueError("No pude detectar el año desde catalogo/cubo")
+    return int(m.group(0))
+
+def get_bases_por_anio(catalogo: str, cubo: str) -> dict:
+    anio = detectar_anio(catalogo, cubo)
+    cfg = DIMENSIONES_POR_ANIO.get(anio)
+    if not cfg:
+        raise ValueError(f"No hay configuración para el año {anio}")
+    return cfg
 
 
 # =========================
@@ -1675,6 +1697,171 @@ FROM [{cubo_safe}]
                 "cubo": cubo,
                 "resultados": resultados,
                 "clues_detectado": clues_level,  # opcional (debug)
+            }
+
+        return ejecutar_conexion_olap(consulta, catalogo=catalogo)
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/clues_unidades_por_estado", dependencies=[Depends(verify_token)])
+def clues_unidades_por_estado(
+    catalogo: str = Body(...),
+    cubo: str = Body(...),
+    estado: str = Body("HIDALGO"),
+    max_rows: int = Body(200000),
+):
+    try:
+        catalogo = (catalogo or "").strip()
+        cubo = (cubo or "").strip()
+        estado = " ".join((estado or "").strip().split()).upper()
+
+        if not catalogo or not cubo:
+            return JSONResponse(status_code=400, content={"error": "catalogo y cubo son requeridos"})
+        if not estado:
+            return JSONResponse(status_code=400, content={"error": "estado viene vacío"})
+        if not isinstance(max_rows, int) or max_rows <= 0:
+            return JSONResponse(status_code=400, content={"error": "max_rows debe ser entero > 0"})
+
+        cfg = get_bases_por_anio(catalogo, cubo)
+        unidad_base = cfg["unidad_base"]  # ej: [DIM UNIDAD].[Unidad Médica]
+
+        LVL_ENTIDAD = f"{unidad_base}.[Entidad]"
+        LVL_NOMBRE  = f"{unidad_base}.[Nombre de la Unidad Médica]"
+
+        def consulta(conn):
+            cat = sql_lit(catalogo)
+            cube = sql_lit(cubo)
+
+            # 1) Resolver MEMBER_UNIQUE_NAME de la Entidad (HIDALGO)
+            q_ent = f"""
+            SELECT TOP 1
+              [MEMBER_UNIQUE_NAME],
+              [MEMBER_CAPTION]
+            FROM $system.MDSCHEMA_MEMBERS
+            WHERE [CATALOG_NAME] = '{cat}'
+              AND [CUBE_NAME] = '{cube}'
+              AND [LEVEL_UNIQUE_NAME] = '{sql_lit(LVL_ENTIDAD)}'
+              AND [MEMBER_CAPTION] = '{sql_lit(estado)}'
+            """
+            ent_rows = ejecutar_query_rows_execute(conn, q_ent) or []
+            if not ent_rows:
+                return {
+                    "catalogo": catalogo,
+                    "cubo": cubo,
+                    "estado": estado,
+                    "total": 0,
+                    "resultados": [],
+                    "error": f"No se encontró la entidad '{estado}' en el nivel {LVL_ENTIDAD}",
+                }
+
+            entidad_member = (ent_rows[0].get("MEMBER_UNIQUE_NAME") or "").strip()
+            if not entidad_member:
+                return {
+                    "catalogo": catalogo,
+                    "cubo": cubo,
+                    "estado": estado,
+                    "total": 0,
+                    "resultados": [],
+                    "error": "Entidad encontrada pero sin MEMBER_UNIQUE_NAME",
+                }
+
+            # 2) MDX: traer SOLO miembros del nivel "Nombre de la Unidad Médica" dentro de HIDALGO
+            cubo_safe = cubo.replace("]", "]]")
+            mdx = f"""
+WITH
+SET [S_Nombres] AS
+  HEAD(
+    DESCENDANTS( {{ {entidad_member} }}, {LVL_NOMBRE} ),
+    {int(max_rows)}
+  )
+SELECT
+  {{ [Measures].[Total] }} ON 0,
+  [S_Nombres] ON 1
+FROM [{cubo_safe}]
+            """.strip()
+
+            rows = ejecutar_mdx_recordset(conn, mdx) or []
+
+            # 3) Extraer unique names de los rows MDX (keys)
+            nombre_unique = mdx_rows_extract_unique_names(rows)
+
+            if not nombre_unique:
+                return {
+                    "catalogo": catalogo,
+                    "cubo": cubo,
+                    "estado": estado,
+                    "unidad_base": unidad_base,
+                    "total": 0,
+                    "resultados": [],
+                }
+
+            # 4) Resolver para cada "Nombre UM":
+            #    - su caption (nombre_unidad)
+            #    - su PARENT_UNIQUE_NAME (que debe ser el CLUES)
+            #    y luego caption del parent (clues)
+            cache: dict[str, dict] = {}
+
+            def member_info_with_parent(un: str) -> dict | None:
+                un = (un or "").strip()
+                if not un:
+                    return None
+                if un in cache:
+                    return cache[un]
+
+                q = f"""
+                SELECT TOP 1
+                  [MEMBER_UNIQUE_NAME],
+                  [MEMBER_CAPTION],
+                  [MEMBER_NAME],
+                  [PARENT_UNIQUE_NAME]
+                FROM $system.MDSCHEMA_MEMBERS
+                WHERE [CATALOG_NAME] = '{cat}'
+                  AND [CUBE_NAME] = '{cube}'
+                  AND [MEMBER_UNIQUE_NAME] = '{sql_lit(un)}'
+                """
+                rr = ejecutar_query_rows_execute(conn, q) or []
+                cache[un] = rr[0] if rr else None
+                return cache[un]
+
+            resultados = []
+            seen = set()
+
+            for un_nombre in nombre_unique:
+                info_nombre = member_info_with_parent(un_nombre) or {}
+                nombre_cap = (info_nombre.get("MEMBER_CAPTION") or info_nombre.get("MEMBER_NAME") or "").strip()
+                parent_un = (info_nombre.get("PARENT_UNIQUE_NAME") or "").strip()
+
+                if not parent_un:
+                    # si no hay parent, no podemos inferir CLUES
+                    continue
+
+                info_parent = member_info_with_parent(parent_un) or {}
+                clues_cap = (info_parent.get("MEMBER_CAPTION") or info_parent.get("MEMBER_NAME") or "").strip().upper()
+
+                if not clues_cap:
+                    continue
+
+                key = (clues_cap, nombre_cap)
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                resultados.append({
+                    "clues": clues_cap,
+                    "nombre_unidad": nombre_cap or None,
+                })
+
+            resultados.sort(key=lambda x: (x["clues"] or "", x["nombre_unidad"] or ""))
+
+            return {
+                "catalogo": catalogo,
+                "cubo": cubo,
+                "estado": estado,
+                "unidad_base": unidad_base,
+                "total": len(resultados),
+                "resultados": resultados,
             }
 
         return ejecutar_conexion_olap(consulta, catalogo=catalogo)
