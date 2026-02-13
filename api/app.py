@@ -365,27 +365,36 @@ def detectar_institucion_por_clues(clues: str) -> str | None:
     pref = c[:5]
     return INSTITUCION_POR_PREFIJO.get(pref)
 
+PALABRAS_EXCLUIR = [
+    "JURISDICCI",   # cubre JURISDICCIÓN / JURISDICCION
+    "COORDINA",
+    "SUBDIRECCI",
+    "DIRECCI",
+    "DENTAL",
+    "ADMINISTRA",
+    "LABORATORIO",
+    "JUR.",
+    "CENTRO ANTIRRABICO",
+]
+
 def limpiar_nombre_unidad(nombre: str) -> str | None:
     """
-    Quita segmentos tipo:
-      '... JURISDICCIÓN ...'
-      '... JURISDICCION ...'
-    y también limpia separadores comunes.
+    Filtra nombres que NO sean unidades médicas reales.
+    Si contiene palabras administrativas/jurisdiccionales → retorna None.
     """
+
     if not nombre:
         return None
 
     s = " ".join(str(nombre).split()).strip()
+    s_upper = s.upper()
 
-    # corta desde "JURISDICCIÓN/JURISDICCION" hasta el final
-    s = re.sub(r"\s*[-–|:/,]*\s*JURISDICCI[ÓO]N\b.*$", "", s, flags=re.IGNORECASE)
+    # 🚫 Si contiene cualquier palabra prohibida → descartar completo
+    for palabra in PALABRAS_EXCLUIR:
+        if palabra in s_upper:
+            return None
 
-    # por si viene al inicio (raro)
-    s = re.sub(r"^JURISDICCI[ÓO]N\b.*$", "", s, flags=re.IGNORECASE)
-
-    s = s.strip(" -–|:/,")
-    return s or None
-
+    return s
 
 
 @app.get("/cubos_sis_estandarizados", dependencies=[Depends(verify_token)])
