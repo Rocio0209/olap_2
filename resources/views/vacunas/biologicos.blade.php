@@ -23,21 +23,31 @@
 
                     <div class="col-md-6">
                         <label class="form-label">CLUES</label>
-                        <select id="cluesSelect" class="form-select" multiple style="width:100%"></select>
+
+                        <!-- INPUT BUSCADOR -->
+                        <input id="cluesInput" class="form-control" placeholder="Escribe CLUES o nombre de unidad...">
+
+                        <!-- RESULTADOS -->
+                        <div id="cluesResults" class="list-group mt-1 d-none" style="max-height: 220px; overflow:auto;">
+                        </div>
+
+                        <!-- CHIPS SELECCIONADAS -->
+                        <div id="cluesChips" class="d-flex flex-wrap gap-2 mt-2"></div>
 
                         <div class="mt-2 d-flex gap-2 flex-wrap">
-                            <button id="btnAllHG" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
+                            <button id="btnPrefixHG" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
                                 HG</button>
-                            <button id="btnAllHGIMB" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
+                            <button id="btnPrefixHGIMB" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
                                 HGIMB</button>
-                            <button id="btnAllHGSSA" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
+                            <button id="btnPrefixHGSSA" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
                                 HGSSA</button>
                             <button id="btnClearClues" type="button"
                                 class="btn btn-outline-danger btn-sm">Limpiar</button>
                         </div>
-                        <small class="text-muted">Escribe dentro del selector para buscar y selecciona solo las que
-                            quieras.</small>
+
+                        <small class="text-muted">Escribe, selecciona de la lista y se agregará como chip.</small>
                     </div>
+
 
                 </div>
 

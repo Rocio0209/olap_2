@@ -241,6 +241,8 @@ btn.addEventListener("click", async () => {
 });
 });
 
+const clues = window.getSelectedClues?.() ?? [];
+
 
 function getSelectedClues() {
     const sel = document.getElementById("cluesSelect");
