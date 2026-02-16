@@ -10,11 +10,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const catalogo = document.getElementById("catalogoInput")?.value?.trim();
             const cubo = document.getElementById("cuboInput")?.value?.trim();
-            const cluesRaw = document.getElementById("cluesInput")?.value ?? "";
-            const clues = cluesRaw
-                .split(",")
-                .map(s => s.trim())
-                .filter(Boolean);
+            const clues = getSelectedClues();
+            if (!clues.length) {
+                alert("Selecciona al menos 1 CLUES.");
+                return;
+            }
+
 
             const payload = { catalogo, cubo, clues };
 
@@ -169,3 +170,72 @@ function escapeHtml(str) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
+
+let btn = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+  btn = document.getElementById("btnConsultarPreview");
+  if (!btn) return;
+
+btn.addEventListener("click", async () => {
+    try {
+        btn.disabled = true;
+
+        const catalogo = document.getElementById("catalogoInput")?.value?.trim();
+        const cubo = document.getElementById("cuboInput")?.value?.trim();
+
+        const clues = getSelectedClues();
+
+        if (!clues.length) {
+            alert("Selecciona al menos 1 CLUES.");
+            return;
+        }
+
+        const payload = { catalogo, cubo, clues };
+
+        const res = await fetch("/api/vacunas/biologicos/preview", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.ok === false) {
+            console.error("Error preview:", data);
+            alert(data?.message ?? "Error al consultar preview");
+            return;
+        }
+
+        renderResumen(data.summary);
+
+        const table = data.table;
+        const headerDef = renderHeadersNested(table, {
+            tablaHeader: document.getElementById("tablaHeader"),
+            variablesHeader: document.getElementById("variablesHeader"),
+        });
+
+        renderRowsNested(table, {
+            tablaResultadosBody: document.getElementById("tablaResultadosBody"),
+        }, headerDef);
+
+    } catch (e) {
+        console.error(e);
+        alert("Error inesperado. Revisa consola.");
+    } finally {
+        btn.disabled = false;
+    }
+});
+});
+
+
+function getSelectedClues() {
+    const sel = document.getElementById("cluesSelect");
+    if (!sel) return [];
+    return Array.from(sel.selectedOptions).map(o => o.value).filter(Boolean);
+}
+

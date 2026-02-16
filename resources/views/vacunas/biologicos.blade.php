@@ -21,17 +21,35 @@
                         <input id="cuboInput" class="form-control" value="SIS_2024">
                     </div>
 
-                    <div class="col-md-4">
-                        <label class="form-label">CLUES (separadas por coma)</label>
-                        <input id="cluesInput" class="form-control" value="HGIMB000011">
+                    <div class="col-md-6">
+                        <label class="form-label">Buscar CLUES</label>
+                        <input id="cluesSearchInput" class="form-control"
+                            placeholder="Escribe para buscar... (ej: HGIMB0000 o ACAT)">
+                        <small class="text-muted">Se muestran 5 resultados. Escribe para refinar.</small>
                     </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">CLUES seleccionadas</label>
+                        <select id="cluesSelect" class="form-select" multiple size="5"></select>
+
+                        <div class="mt-2 d-flex gap-2 flex-wrap">
+                            <button id="btnAddAllHG" type="button" class="btn btn-outline-secondary btn-sm">Todas
+                                HG</button>
+                            <button id="btnAddAllHGIMB" type="button" class="btn btn-outline-secondary btn-sm">Todas
+                                HGIMB</button>
+                            <button id="btnAddAllHGSSA" type="button" class="btn btn-outline-secondary btn-sm">Todas
+                                HGSSA</button>
+                            <button id="btnClearClues" type="button"
+                                class="btn btn-outline-danger btn-sm">Limpiar</button>
+                        </div>
+                    </div>
+
                 </div>
 
                 <div class="mt-3">
                     <button id="btnConsultarPreview" class="btn btn-primary">
                         Consultar (Preview)
                     </button>
-                    <x-precarga></x-precarga>
                 </div>
 
                 <div id="resumenPreview" class="alert alert-info d-none mt-3"></div>
