@@ -22,26 +22,21 @@
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label">Buscar CLUES</label>
-                        <input id="cluesSearchInput" class="form-control"
-                            placeholder="Escribe para buscar... (ej: HGIMB0000 o ACAT)">
-                        <small class="text-muted">Se muestran 5 resultados. Escribe para refinar.</small>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label">CLUES seleccionadas</label>
-                        <select id="cluesSelect" class="form-select" multiple size="5"></select>
+                        <label class="form-label">CLUES</label>
+                        <select id="cluesSelect" class="form-select" multiple style="width:100%"></select>
 
                         <div class="mt-2 d-flex gap-2 flex-wrap">
-                            <button id="btnAddAllHG" type="button" class="btn btn-outline-secondary btn-sm">Todas
+                            <button id="btnAllHG" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
                                 HG</button>
-                            <button id="btnAddAllHGIMB" type="button" class="btn btn-outline-secondary btn-sm">Todas
+                            <button id="btnAllHGIMB" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
                                 HGIMB</button>
-                            <button id="btnAddAllHGSSA" type="button" class="btn btn-outline-secondary btn-sm">Todas
+                            <button id="btnAllHGSSA" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
                                 HGSSA</button>
                             <button id="btnClearClues" type="button"
                                 class="btn btn-outline-danger btn-sm">Limpiar</button>
                         </div>
+                        <small class="text-muted">Escribe dentro del selector para buscar y selecciona solo las que
+                            quieras.</small>
                     </div>
 
                 </div>

@@ -10,11 +10,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const catalogo = document.getElementById("catalogoInput")?.value?.trim();
             const cubo = document.getElementById("cuboInput")?.value?.trim();
-            const clues = getSelectedClues();
-            if (!clues.length) {
-                alert("Selecciona al menos 1 CLUES.");
-                return;
-            }
+            const clues = typeof window.getSelectedClues === "function"
+        ? window.getSelectedClues()
+        : getSelectedCluesFallback();
+
+      if (!clues.length) {
+        alert("Selecciona al menos 1 CLUES.");
+        return;
+      }
 
 
             const payload = { catalogo, cubo, clues };
@@ -59,6 +62,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 });
+
+function getSelectedCluesFallback() {
+  const sel = document.getElementById("cluesSelect");
+  if (!sel) return [];
+  return Array.from(sel.selectedOptions).map(o => o.value).filter(Boolean);
+}
 
 function renderResumen(summary) {
     const el = document.getElementById("resumenPreview");
