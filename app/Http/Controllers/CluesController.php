@@ -94,4 +94,49 @@ class CluesController extends Controller
             'items' => $items,
         ]);
     }
+    public function porEstado(Request $request)
+{
+    $catalogo = $request->query('catalogo');
+    $cubo     = $request->query('cubo');
+    $estado   = $request->query('estado');
+
+    if (!$catalogo || !$cubo || !$estado) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Faltan parámetros requeridos'
+        ], 422);
+    }
+
+    try {
+
+        $baseUrl = rtrim(config('services.vacunas_api.url'), '/');
+
+        $response = Http::timeout(120)
+            ->withToken(config('services.vacunas_api.token'))
+            ->post($baseUrl . '/clues_y_nombre_unidad_por_estado', [
+                'catalogo' => $catalogo,
+                'cubo'     => $cubo,
+                'estado'   => $estado,
+            ]);
+
+        if (!$response->successful()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Error API externa',
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ], $response->status());
+        }
+
+        return response()->json($response->json());
+
+    } catch (\Throwable $e) {
+
+        return response()->json([
+            'ok' => false,
+            'message' => 'Error interno',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
 }

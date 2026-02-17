@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
       catalogo,
       cubo,
       estado: getEstado(),
-      limit: "10",
+      limit: "10", // traemos 600 resultados para que el usuario vea más opciones, pero el front solo muestra los 10 primeros (o lo que quieras)
       prefix: currentPrefix,
       q,
     });
@@ -130,9 +130,65 @@ document.addEventListener("DOMContentLoaded", () => {
     if (input.value.trim().length >= 1) input.dispatchEvent(new Event("input"));
   };
 
-  btnHG?.addEventListener("click", () => setPrefix("HG"));
-  btnHGIMB?.addEventListener("click", () => setPrefix("HGIMB"));
-  btnHGSSA?.addEventListener("click", () => setPrefix("HGSSA"));
+async function addAllByPrefix(prefix) {
+  const catalogo = getCatalogo();
+  const cubo = getCubo();
+
+  if (!catalogo || !cubo) {
+    alert("Primero selecciona SIS.");
+    return;
+  }
+
+  const qs = new URLSearchParams({
+    catalogo,
+    cubo,
+    estado: getEstado(),
+  });
+
+  const res = await fetch(`/api/vacunas/clues_y_nombre_unidad_por_estado?${qs.toString()}`, {
+    headers: { Accept: "application/json" },
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    console.error("Error masivo:", data);
+    alert(data?.error ?? data?.message ?? "Error al traer CLUES por estado");
+    return;
+  }
+
+  const rows = data.data ?? [];
+
+  const normalized = rows
+    .filter(r => (r.clues ?? "").toUpperCase().startsWith(prefix.toUpperCase()))
+    .map(r => ({
+      value: r.clues,
+      label: `${r.clues} - ${r.nombre_unidad ?? ""}`.trim(),
+    }));
+
+  if (normalized.length > 300) {
+    const ok = confirm(`Se agregarán ${normalized.length} CLUES (${prefix}). ¿Continuar?`);
+    if (!ok) return;
+  }
+
+  window.addManyClues?.(normalized);
+}
+
+
+  btnHG?.addEventListener("click", async () => {
+    currentPrefix = "HG";      // opcional: que el buscador quede en ese prefijo
+    await addAllByPrefix("HG");
+  });
+
+  btnHGIMB?.addEventListener("click", async () => {
+    currentPrefix = "HGIMB";
+    await addAllByPrefix("HGIMB");
+  });
+
+  btnHGSSA?.addEventListener("click", async () => {
+    currentPrefix = "HGSSA";
+    await addAllByPrefix("HGSSA");
+  });
 
   // limpiar
   btnClear?.addEventListener("click", () => {
@@ -158,4 +214,21 @@ document.addEventListener("DOMContentLoaded", () => {
     input.value = "";
     hideResults();
   };
+  window.addManyClues = (items) => {
+    // items: [{value, label}] o [{clues, unidad}] según tu endpoint
+    if (!Array.isArray(items)) return;
+
+    for (const it of items) {
+      const value = it.value ?? it.clues ?? it.CLUES ?? it.clue;
+      const label = it.label ?? it.unidad ?? it.unidad_nombre ?? value;
+
+      if (!value) continue;
+      if (selected.has(value)) continue;
+
+      selected.set(value, label);
+    }
+
+    renderChips();
+  };
+
 });
