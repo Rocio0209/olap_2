@@ -3,9 +3,11 @@ load_dotenv()
 
 import os
 import re
-from fastapi import FastAPI, Depends, Body
+from fastapi import FastAPI, Depends, Body, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+
+from typing import Optional
 
 import unicodedata
 import pythoncom
@@ -431,6 +433,94 @@ def cubos_sis_estandarizados():
     except Exception:
         return JSONResponse(status_code=500, content={"error": "Error interno"})
 
+
+@app.get("/catalogos_y_cubos_sis", dependencies=[Depends(verify_token)])
+def catalogos_y_cubos_sis():
+    try:
+        # 1) Obtener catálogos y filtrar SOLO SIS_ y Cubo solo sinba
+        def get_catalogos_filtrados(conn):
+                cats = ejecutar_query_lista(
+                    conn,
+                    "SELECT [CATALOG_NAME] FROM $system.DBSCHEMA_CATALOGS",
+                    "CATALOG_NAME",
+                )
+
+                import re
+
+                # SIS_YYYY con o sin sufijo (ej: SIS_2019_2)
+                sis_regex = re.compile(r"^SIS_(\d{4})(?:_.*)?$", re.IGNORECASE)
+
+                # Cubo solo sinba YYYY
+                sinba_regex = re.compile(r"^Cubo solo sinba (\d{4})$", re.IGNORECASE)
+
+                permitidos = set()
+
+                for c in cats:
+                    name = (c or "").strip()
+                    if not name:
+                        continue
+
+                    # ---- FILTRO 2019 EN ADELANTE ----
+                    m = sis_regex.match(name)
+                    if m and int(m.group(1)) >= 2019:
+                        permitidos.add(name)
+                        continue
+
+                    m = sinba_regex.match(name)
+                    if m and int(m.group(1)) >= 2019:
+                        permitidos.add(name)
+
+                return sorted(permitidos)
+
+
+        catalogos = ejecutar_conexion_olap(get_catalogos_filtrados)
+
+        # 2) Por cada catálogo (en contexto) obtener cubos
+        def get_cubos_en_contexto(conn):
+            q = """
+            SELECT
+            [CUBE_NAME],
+            [CUBE_SOURCE]
+            FROM $system.MDSCHEMA_CUBES
+            """
+            rows = ejecutar_query_rows_execute(conn, q)
+
+            cubos_out = []
+
+            for r in rows:
+                cube_name = (r.get("CUBE_NAME") or "").strip()
+                if not cube_name:
+                    continue
+
+                cube_source = r.get("CUBE_SOURCE")
+                cube_source_str = "" if cube_source is None else str(cube_source).strip()
+
+                # Solo cubos reales (source = 1)
+                if cube_source_str != "1":
+                    continue
+
+                cubos_out.append(cube_name)
+
+            cubos_out.sort()
+            return cubos_out
+
+
+        agrupado = {}
+
+        for cat in catalogos:
+            cubos = ejecutar_conexion_olap(get_cubos_en_contexto, catalogo=cat)
+
+            # Solo guardar si tiene cubos
+            if cubos:
+                agrupado[cat] = cubos
+
+        return {
+            "catalogo": agrupado
+        }
+
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/biologicos_por_clues_con_unidad", dependencies=[Depends(verify_token)])
 def biologicos_por_clues_con_unidad(

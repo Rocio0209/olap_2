@@ -147,6 +147,8 @@ class BiologicosController extends Controller
             'incluir_ceros' => $incluirCeros,
         ];
 
+        logger()->info('VACUNAS TOKEN LEN', ['len' => strlen((string) config('services.vacunas_api.token'))]);
+
         $response = Http::timeout(120)
             ->withToken(config('services.vacunas_api.token'))
             ->post($url, $payload);
@@ -208,6 +210,29 @@ class BiologicosController extends Controller
     return $rows;
 }
 
+
+public function cubosSisEstandarizados()
+{
+    $baseUrl = rtrim(config('services.vacunas_api.url'), '/');
+    $url = $baseUrl . '/cubos_sis_estandarizados';
+
+    $response = Http::timeout(60)
+        ->withToken(config('services.vacunas_api.token'))
+        ->get($url);
+
+    if (!$response->successful()) {
+    return [
+        'ok' => false,
+        'status' => $response->status(),
+        'body' => $response->json() ?? $response->body(),
+    ];
+}
+
+
+    return response()->json($response->json());
+}
+
+
     /**
      * ✅ Headers mínimos (para que el front tenga columnas fijas).
      * Luego lo ajustamos al layout tipo Excel (BCG, etc.).
@@ -264,5 +289,18 @@ class BiologicosController extends Controller
 
     return $apartados;
 }
+
+public function catalogosYCubosSis()
+{
+    $baseUrl = rtrim(config('services.vacunas_api.url'), '/');
+    $url = $baseUrl . '/catalogos_y_cubos_sis';
+
+    $response = \Illuminate\Support\Facades\Http::timeout(60)
+        ->withToken(config('services.vacunas_api.token'))
+        ->get($url);
+
+    return response()->json($response->json(), $response->status());
+}
+
 
 }

@@ -18,8 +18,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let debounceT = null;
   let currentPrefix = "";
-
-  // Guardamos seleccionadas: Map<value, label>
   const selected = new Map();
 
   function escapeHtml(str) {
@@ -31,15 +29,15 @@ document.addEventListener("DOMContentLoaded", () => {
       .replaceAll("'", "&#039;");
   }
 
+  function hideResults() {
+    results.classList.add("d-none");
+    results.innerHTML = "";
+  }
+
   function showResults(items) {
-    // filtra las ya seleccionadas
     const filtered = (items ?? []).filter(it => !selected.has(it.value));
 
-    if (!filtered.length) {
-      results.classList.add("d-none");
-      results.innerHTML = "";
-      return;
-    }
+    if (!filtered.length) return hideResults();
 
     results.classList.remove("d-none");
     results.innerHTML = filtered.map(it => `
@@ -52,11 +50,6 @@ document.addEventListener("DOMContentLoaded", () => {
     `).join("");
   }
 
-  function hideResults() {
-    results.classList.add("d-none");
-    results.innerHTML = "";
-  }
-
   function renderChips() {
     chips.innerHTML = Array.from(selected.entries()).map(([value, label]) => `
       <span class="badge text-bg-secondary d-inline-flex align-items-center gap-2 py-2 px-2" data-value="${escapeHtml(value)}">
@@ -67,22 +60,26 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function addSelected(value, label) {
-    if (!value) return;
-    if (selected.has(value)) return;
+    if (!value || selected.has(value)) return;
 
     selected.set(value, label ?? value);
     renderChips();
 
-    // limpia input y resultados
     input.value = "";
     input.focus();
     hideResults();
   }
 
   async function search(q) {
+    const catalogo = getCatalogo();
+    const cubo = getCubo();
+
+    // ✅ si aún no eligió SIS, no buscamos
+    if (!catalogo || !cubo) return [];
+
     const qs = new URLSearchParams({
-      catalogo: getCatalogo(),
-      cubo: getCubo(),
+      catalogo,
+      cubo,
       estado: getEstado(),
       limit: "10",
       prefix: currentPrefix,
@@ -98,16 +95,12 @@ document.addEventListener("DOMContentLoaded", () => {
     return data.items ?? [];
   }
 
-  // --- typing ---
+  // typing
   input.addEventListener("input", () => {
     clearTimeout(debounceT);
     const q = input.value.trim();
 
-    // no mensaje molesto, solo no buscamos si está corto
-    if (q.length < 1) {
-      hideResults();
-      return;
-    }
+    if (q.length < 1) return hideResults();
 
     debounceT = setTimeout(async () => {
       const items = await search(q);
@@ -115,7 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 250);
   });
 
-  // click en resultados
+  // click resultado
   results.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-value]");
     if (!btn) return;
@@ -134,15 +127,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const setPrefix = (p) => {
     currentPrefix = p;
     input.focus();
-    // si ya hay texto, re-busca
-    const q = input.value.trim();
-    if (q.length >= 2) input.dispatchEvent(new Event("input"));
+    if (input.value.trim().length >= 1) input.dispatchEvent(new Event("input"));
   };
 
   btnHG?.addEventListener("click", () => setPrefix("HG"));
   btnHGIMB?.addEventListener("click", () => setPrefix("HGIMB"));
   btnHGSSA?.addEventListener("click", () => setPrefix("HGSSA"));
 
+  // limpiar
   btnClear?.addEventListener("click", () => {
     currentPrefix = "";
     selected.clear();
@@ -152,12 +144,18 @@ document.addEventListener("DOMContentLoaded", () => {
     input.focus();
   });
 
-  // cerrar lista si haces click afuera
+  // click afuera cierra
   document.addEventListener("click", (e) => {
     if (e.target === input || results.contains(e.target)) return;
     hideResults();
   });
 
-  // helper global para tu preview.js
+  // helpers globales
   window.getSelectedClues = () => Array.from(selected.keys());
+  window.clearClues = () => {
+    selected.clear();
+    renderChips();
+    input.value = "";
+    hideResults();
+  };
 });
