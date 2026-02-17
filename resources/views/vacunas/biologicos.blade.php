@@ -21,18 +21,19 @@
                         <input id="cuboInput" class="form-control" value="SIS_2024">
                     </div>
 
-                    <div class="col-md-6">
+                    <div class="col-md-11">
                         <label class="form-label">CLUES</label>
+                        <div class="position-relative">
+                            <input id="cluesInput" class="form-control"
+                                placeholder="Escribe CLUES o nombre de unidad...">
 
-                        <!-- INPUT BUSCADOR -->
-                        <input id="cluesInput" class="form-control" placeholder="Escribe CLUES o nombre de unidad...">
-
-                        <!-- RESULTADOS -->
-                        <div id="cluesResults" class="list-group mt-1 d-none" style="max-height: 220px; overflow:auto;">
+                            <div id="cluesResults" class="list-group position-absolute w-100 d-none"
+                                style="top:100%; left:0; z-index:1050; max-height:220px; overflow:auto;">
+                            </div>
                         </div>
 
-                        <!-- CHIPS SELECCIONADAS -->
                         <div id="cluesChips" class="d-flex flex-wrap gap-2 mt-2"></div>
+
 
                         <div class="mt-2 d-flex gap-2 flex-wrap">
                             <button id="btnPrefixHG" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
@@ -44,8 +45,7 @@
                             <button id="btnClearClues" type="button"
                                 class="btn btn-outline-danger btn-sm">Limpiar</button>
                         </div>
-
-                        <small class="text-muted">Escribe, selecciona de la lista y se agregará como chip.</small>
+                        
                     </div>
 
 

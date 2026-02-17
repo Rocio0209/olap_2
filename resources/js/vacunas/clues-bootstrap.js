@@ -104,7 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const q = input.value.trim();
 
     // no mensaje molesto, solo no buscamos si está corto
-    if (q.length < 2) {
+    if (q.length < 1) {
       hideResults();
       return;
     }
