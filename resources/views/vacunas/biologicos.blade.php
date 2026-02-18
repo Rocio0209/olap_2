@@ -41,9 +41,8 @@
                         </div>
                     </div>
 
-                    <div id="cluesChips" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    <div id="cluesChips" class="d-flex flex-wrap gap-2 mt-2" style="max-height: 200px; overflow-y: auto;"></div>
 
-                    
 
                     <div class="mt-2 d-flex gap-2 flex-wrap">
                         <button id="btnPrefixHG" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
