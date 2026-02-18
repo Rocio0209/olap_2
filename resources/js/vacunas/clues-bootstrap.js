@@ -167,9 +167,20 @@ async function addAllByPrefix(prefix) {
     }));
 
   if (normalized.length > 300) {
-    const ok = confirm(`Se agregarán ${normalized.length} CLUES (${prefix}). ¿Continuar?`);
-    if (!ok) return;
-  }
+  const ok = await confirmWithModal({
+    title: "Confirmar selección masiva",
+    html: `
+      <p class="mb-2">Vas a agregar <b>${normalized.length}</b> CLUES con prefijo <b>${prefix}</b>.</p>
+      <p class="mb-0 text-muted">Esto puede tardar un poco y agregará chips en la lista.</p>
+    `,
+    okText: "Sí, agregar",
+  });
+
+  if (!ok) return;
+}
+
+window.addManyClues?.(normalized);
+
 
   window.addManyClues?.(normalized);
 }
@@ -232,3 +243,48 @@ async function addAllByPrefix(prefix) {
   };
 
 });
+function confirmWithModal({ title, html, okText } = {}) {
+  return new Promise((resolve) => {
+    const modalEl = document.getElementById("confirmPrefijoModal");
+    const bodyEl = document.getElementById("confirmPrefijoBody");
+    const titleEl = document.getElementById("avisoTitleconfirmPrefijoModal");
+    const okBtn = document.getElementById("avisoActionBtnconfirmPrefijoModal");
+    const closeBtn = document.getElementById("avisoCloseModalconfirmPrefijoModal");
+
+    if (!modalEl || !bodyEl || !titleEl || !okBtn) {
+      // fallback por si algo falta
+      resolve(window.confirm("¿Continuar?"));
+      return;
+    }
+
+    if (title) titleEl.textContent = title;
+    if (html) bodyEl.innerHTML = html;
+    if (okText) okBtn.textContent = okText;
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+    let decided = false;
+
+    okBtn.onclick = () => {
+      decided = true;
+      modal.hide();
+      resolve(true);
+    };
+
+    // si cierra por X, backdrop, ESC o Cancelar
+    const onHidden = () => {
+      modalEl.removeEventListener("hidden.bs.modal", onHidden);
+      if (!decided) resolve(false);
+    };
+
+    modalEl.addEventListener("hidden.bs.modal", onHidden);
+
+    // si tu botón cancelar tiene data-bs-dismiss ya cierra solo
+    closeBtn?.addEventListener("click", () => {
+      // no hacemos resolve aquí; lo hará hidden.bs.modal
+    }, { once: true });
+
+    modal.show();
+  });
+}
+

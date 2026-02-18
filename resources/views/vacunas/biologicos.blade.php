@@ -43,6 +43,7 @@
 
                     <div id="cluesChips" class="d-flex flex-wrap gap-2 mt-2"></div>
 
+                    
 
                     <div class="mt-2 d-flex gap-2 flex-wrap">
                         <button id="btnPrefixHG" type="button" class="btn btn-outline-secondary btn-sm">Prefijo
@@ -79,6 +80,22 @@
 
         </div>
     </div>
+    <x-modal-aviso
+    id="confirmPrefijoModal"
+    modaltype="warning"
+    textTitle="Confirmar selección masiva"
+    accionBtnTxt="Sí, agregar"
+    accionBtnClass="btn-primary"
+    closeDataModalTxt="Cancelar"
+    closeDataModalClass="btn-secondary"
+    :showOk="true"
+    :showCerrar="true"
+>
+    <div id="confirmPrefijoBody">
+        <!-- aquí inyectamos el mensaje desde JS -->
+    </div>
+</x-modal-aviso>
+
 
     {{-- <x-precarga></x-precarga> --}}
     </div>
