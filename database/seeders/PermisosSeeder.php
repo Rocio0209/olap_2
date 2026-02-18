@@ -117,6 +117,8 @@ class PermisosSeeder extends Seeder
         Permission::create(['name' => 'updt_permisos', 'description'=>'Actualizar Permisos', 'group'=>'Permisos']);
         Permission::create(['name' => 'del_permisos', 'description'=>'Eliminar Permisos', 'group'=>'Permisos']);
 
+        Permission::create(['name' => 'vacunas/biologicos', 'description'=>'Ver Biológicos', 'group'=>'Biológicos']);
+
         // this can be done as separate statements
         $role = Role::create(['name' => 'Administrador General']);
         $role->givePermissionTo(Permission::all());

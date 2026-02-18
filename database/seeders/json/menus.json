@@ -1,5 +1,5 @@
 [
-    {"idmenu":"1","menu":"Catálogos","tipo":"0","superior":null,"link":"#","orden":"1","visible":"1","newtab":"0","icono":"fa-solid fa-rectangle-list"},
+    {"idmenu":"1","menu":"Catálogos","tipo":"0","superior":null,"link":"#","orden":"2","visible":"1","newtab":"0","icono":"fa-solid fa-rectangle-list"},
     {"idmenu":"2","menu":"Estados","tipo":"1","superior":"1","link":"catalogos/estados","orden":"1","visible":"1","newtab":"0","icono":null},
     {"idmenu":"3","menu":"Regionales","tipo":"1","superior":"1","link":"catalogos/regionales","orden":"2","visible":"1","newtab":"0","icono":null},
     {"idmenu":"4","menu":"Municipios","tipo":"1","superior":"1","link":"catalogos/municipios","orden":"3","visible":"1","newtab":"0","icono":null},
@@ -13,12 +13,13 @@
     {"idmenu":"12","menu":"Tipos de Administración","tipo":"1","superior":"1","link":"catalogos/tipos_administracion","orden":"11","visible":"1","newtab":"0","icono":null},
     {"idmenu":"13","menu":"Estatus de Unidades","tipo":"1","superior":"1","link":"catalogos/status_unidades","orden":"12","visible":"1","newtab":"0","icono":null},
     {"idmenu":"14","menu":"Unidades","tipo":"1","superior":"1","link":"unidades","orden":"13","visible":"1","newtab":"0","icono":null},
-    {"idmenu":"15","menu":"Configuración","tipo":"0","superior":null,"link":"#","orden":"2","visible":"1","newtab":"0","icono":"fa-solid fa-gear"},
+    {"idmenu":"15","menu":"Configuración","tipo":"0","superior":null,"link":"#","orden":"3","visible":"1","newtab":"0","icono":"fa-solid fa-gear"},
     {"idmenu":"16","menu":"Usuarios","tipo":"1","superior":"15","link":"configuracion/usuarios","orden":"1","visible":"1","newtab":"0","icono":null},
     {"idmenu":"17","menu":"Menús","tipo":"1","superior":"15","link":"configuracion/menus","orden":"2","visible":"1","newtab":"0","icono":null},
     {"idmenu":"18","menu":"Roles","tipo":"1","superior":"15","link":"configuracion/roles","orden":"3","visible":"1","newtab":"0","icono":null},
     {"idmenu":"19","menu":"Permisos","tipo":"1","superior":"15","link":"configuracion/permisos","orden":"4","visible":"1","newtab":"0","icono":null},
     {"idmenu":"20","menu":"Avisos","tipo":"1","superior":"15","link":"avisos","orden":"5","visible":"1","newtab":"0","icono":null},
     {"idmenu":"21","menu":"Eventos","tipo":"1","superior":"15","link":"eventos","orden":"6","visible":"1","newtab":"0","icono":null},
-    {"idmenu":"22","menu":"Panel","tipo":"0","superior":null,"link":"dashboard","orden":"0","visible":"1","newtab":"0","icono":"fa-solid fa-house"}
+    {"idmenu":"22","menu":"Panel","tipo":"0","superior":null,"link":"dashboard","orden":"0","visible":"0","newtab":"0","icono":"fa-solid fa-house"},
+    {"idmenu":"24","menu":"CUBO","tipo":"0","superior":null,"link":"vacunas/biologicos","orden":"1","visible":"1","newtab":"0","icono":"fa-solid fa-cube"}
 ]
