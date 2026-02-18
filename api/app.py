@@ -376,6 +376,7 @@ PALABRAS_EXCLUIR = [
     "LABORATORIO",
     "JUR.",
     "CENTRO ANTIRRABICO",
+    "ADICCION"
 ]
 
 def limpiar_nombre_unidad(nombre: str) -> str | None:

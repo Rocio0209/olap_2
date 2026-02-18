@@ -1,6 +1,8 @@
 console.log("sis-cubos.js ✅");
 
+
 document.addEventListener("DOMContentLoaded", () => {
+    togglePrefixButtonsByCatalog("");
     const sisSelect = document.getElementById("sisSelect");
     const cuboWrap = document.getElementById("cuboWrap");
     const cuboSelect = document.getElementById("cuboSelect");
@@ -24,6 +26,33 @@ document.addEventListener("DOMContentLoaded", () => {
         const m = String(cat).match(/(\d{4})/);
         return m ? m[1] : "";
     }
+function togglePrefixButtonsByCatalog(cat) {
+  const y = (String(cat).match(/(\d{4})/) || [])[1];
+  const year = y ? parseInt(y, 10) : null;
+
+  const btnHG = document.getElementById("btnPrefixHG");
+  const btnHGIMB = document.getElementById("btnPrefixHGIMB");
+  const btnHGSSA = document.getElementById("btnPrefixHGSSA");
+
+  if (!btnHG || !btnHGIMB || !btnHGSSA) return;
+
+  if (!year) {
+    btnHG.style.display = "none";
+    btnHGIMB.style.display = "none";
+    btnHGSSA.style.display = "none";
+    return;
+  }
+
+  if (year >= 2024) {
+    btnHG.style.display = "";
+    btnHGIMB.style.display = "";
+    btnHGSSA.style.display = "";
+  } else {
+    btnHG.style.display = "none";
+    btnHGIMB.style.display = "none";
+    btnHGSSA.style.display = "";
+  }
+}
 
     function makeLabel(cat) {
         // Muestra "SIS 2020" aunque el catálogo sea "Cubo solo sinba 2020" o "SIS_2019_2"
@@ -47,6 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // limpia chips al cambiar
         window.clearClues?.();
     }
+
 
     function renderCuboSelect(cat) {
         const cubos = mapping[cat] || [];
@@ -112,6 +142,8 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         renderCuboSelect(cat);
+        togglePrefixButtonsByCatalog(cat);
+
     });
 
     cuboSelect?.addEventListener("change", () => {
