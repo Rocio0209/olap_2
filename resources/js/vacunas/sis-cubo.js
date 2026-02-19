@@ -135,16 +135,39 @@ function togglePrefixButtonsByCatalog(cat) {
     }
 
     sisSelect.addEventListener("change", () => {
-        const cat = sisSelect.value;
-        if (!cat) {
-            setChosen("", "");
-            if (cuboWrap) cuboWrap.style.display = "none";
-            return;
-        }
-        renderCuboSelect(cat);
-        togglePrefixButtonsByCatalog(cat);
+  const cat = sisSelect.value;
 
-    });
+  // ✅ SI cambia el SIS, limpiamos todo lo dependiente
+  window.clearClues?.(); // chips + input + resultados
+
+  // limpia preview (resumen + headers + body)
+  const resumen = document.getElementById("resumenPreview");
+  if (resumen) {
+    resumen.classList.add("d-none");
+    resumen.innerHTML = "";
+  }
+
+  const header1 = document.getElementById("tablaHeader");
+  if (header1) header1.innerHTML = "";
+
+  const header2 = document.getElementById("variablesHeader");
+  if (header2) header2.innerHTML = "";
+
+  const body = document.getElementById("tablaResultadosBody");
+  if (body) body.innerHTML = "";
+
+  // ✅ si no hay selección, resetea inputs ocultos y cubo
+  if (!cat) {
+    setChosen("", "");
+    if (cuboWrap) cuboWrap.style.display = "none";
+    togglePrefixButtonsByCatalog(""); // opcional: oculta botones
+    return;
+  }
+
+  renderCuboSelect(cat);
+  togglePrefixButtonsByCatalog(cat);
+});
+
 
     cuboSelect?.addEventListener("change", () => {
         const cat = sisSelect.value;
