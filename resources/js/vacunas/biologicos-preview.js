@@ -167,3 +167,20 @@ function escapeHtml(str) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
+
+window.clearPreview = function () {
+  const resumen = document.getElementById("resumenPreview");
+  if (resumen) {
+    resumen.classList.add("d-none");
+    resumen.innerHTML = "";
+  }
+
+  const header1 = document.getElementById("tablaHeader");
+  if (header1) header1.innerHTML = "";
+
+  const header2 = document.getElementById("variablesHeader");
+  if (header2) header2.innerHTML = "";
+
+  const body = document.getElementById("tablaResultadosBody");
+  if (body) body.innerHTML = "";
+};

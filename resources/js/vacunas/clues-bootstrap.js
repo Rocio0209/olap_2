@@ -65,6 +65,8 @@ document.addEventListener("DOMContentLoaded", () => {
     selected.set(value, label ?? value);
     renderChips();
 
+    window.clearPreview?.();
+
     input.value = "";
     input.focus();
     hideResults();
@@ -121,6 +123,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!rm) return;
     selected.delete(rm.dataset.remove);
     renderChips();
+
+      window.clearPreview?.();
+
   });
 
   // prefijos
@@ -208,6 +213,9 @@ window.addManyClues?.(normalized);
     renderChips();
     input.value = "";
     hideResults();
+
+      window.clearPreview?.();
+
     input.focus();
   });
 
