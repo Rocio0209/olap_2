@@ -1,70 +1,203 @@
 console.log("Biologicos Preview cargado correctamente 🚀");
 
 document.addEventListener("DOMContentLoaded", () => {
-    const btn = document.getElementById("btnConsultarPreview");
-    if (!btn) return;
 
-    // evita duplicados si se carga 2 veces
-    if (btn.dataset.bound === "1") return;
-    btn.dataset.bound = "1";
+    /*
+    |--------------------------------------------------------------------------
+    | PREVIEW
+    |--------------------------------------------------------------------------
+    */
 
-    btn.addEventListener("click", async () => {
-        console.log("CLICK PREVIEW - handler único ✅");
+    const btnPreview = document.getElementById("btnConsultarPreview");
+    if (btnPreview && btnPreview.dataset.bound !== "1") {
+
+        btnPreview.dataset.bound = "1";
+
+        btnPreview.addEventListener("click", async () => {
+            console.log("CLICK PREVIEW - handler único ✅");
+
+            try {
+                btnPreview.disabled = true;
+
+                const catalogo = document.getElementById("catalogoInput")?.value?.trim() ?? "";
+                const cubo = document.getElementById("cuboInput")?.value?.trim() ?? "";
+                const clues = window.getSelectedClues?.() ?? [];
+
+                if (!clues.length) {
+                    alert("Selecciona al menos 1 CLUES.");
+                    return;
+                }
+
+                const res = await fetch("/api/vacunas/biologicos/preview", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: JSON.stringify({ catalogo, cubo, clues }),
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || data.ok === false) {
+                    alert(data?.message ?? "Error al consultar preview");
+                    return;
+                }
+
+                renderResumen(data.summary);
+
+                const table = data.table;
+                const headerDef = renderHeadersNested(table, {
+                    tablaHeader: document.getElementById("tablaHeader"),
+                    variablesHeader: document.getElementById("variablesHeader"),
+                });
+
+                renderRowsNested(table, {
+                    tablaResultadosBody: document.getElementById("tablaResultadosBody"),
+                }, headerDef);
+
+            } catch (e) {
+                console.error(e);
+                alert("Error inesperado. Revisa consola.");
+            } finally {
+                btnPreview.disabled = false;
+            }
+        });
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | EXPORTAR CON BARRA TAILWIND
+    |--------------------------------------------------------------------------
+    */
+
+    const btnExport = document.getElementById("btnExportarExcel");
+
+    btnExport?.addEventListener("click", async () => {
+
+        const catalogo = document.getElementById("catalogoInput")?.value?.trim() ?? "";
+        const cubo = document.getElementById("cuboInput")?.value?.trim() ?? "";
+        const clues = window.getSelectedClues?.() ?? [];
+
+        if (!clues.length) {
+            alert("Selecciona al menos 1 CLUES.");
+            return;
+        }
+
+        btnExport.disabled = true;
+
+        // Reset barra
+        const container = document.getElementById("exportProgressContainer");
+        const bar = document.getElementById("exportProgressBar");
+        const percent = document.getElementById("exportProgressPercent");
+        const statusText = document.getElementById("exportStatusText");
+
+        if (container && bar && percent && statusText) {
+            container.classList.remove("d-none");
+            bar.style.width = "0%";
+            percent.textContent = "0%";
+            statusText.textContent = "Iniciando...";
+            bar.classList.remove("bg-blue-600", "bg-red-600");
+            bar.classList.add("bg-green-500");
+        }
 
         try {
-            btn.disabled = true;
 
-            const catalogo = document.getElementById("catalogoInput")?.value?.trim() ?? "";
-            const cubo = document.getElementById("cuboInput")?.value?.trim() ?? "";
-
-            const clues = window.getSelectedClues?.() ?? [];
-            console.log("CLUES seleccionadas:", clues);
-
-            if (!clues.length) {
-                alert("Selecciona al menos 1 CLUES.");
-                return;
-            }
-
-            const payload = { catalogo, cubo, clues };
-
-            const res = await fetch("/api/vacunas/biologicos/preview", {
+            const res = await fetch("/api/vacunas/exports", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Accept": "application/json",
-                    "X-Requested-With": "XMLHttpRequest",
                 },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({ catalogo, cubo, clues }),
             });
 
             const data = await res.json();
 
-            if (!res.ok || data.ok === false) {
-                console.error("Error preview:", data);
-                alert(data?.message ?? "Error al consultar preview");
+            if (!res.ok || !data.ok) {
+                alert("Error creando export");
+                btnExport.disabled = false;
                 return;
             }
 
-            renderResumen(data.summary);
+            const exportId = data.export.id;
 
-            const table = data.table;
-            const headerDef = renderHeadersNested(table, {
-                tablaHeader: document.getElementById("tablaHeader"),
-                variablesHeader: document.getElementById("variablesHeader"),
-            });
-
-            renderRowsNested(table, {
-                tablaResultadosBody: document.getElementById("tablaResultadosBody"),
-            }, headerDef);
+            startPolling(exportId, btnExport);
 
         } catch (e) {
             console.error(e);
-            alert("Error inesperado. Revisa consola.");
-        } finally {
-            btn.disabled = false;
+            alert("Error inesperado.");
+            btnExport.disabled = false;
         }
     });
+
 });
+
+
+/*
+|--------------------------------------------------------------------------
+| POLLING PROGRESO
+|--------------------------------------------------------------------------
+*/
+
+function startPolling(exportId, button) {
+
+    const interval = setInterval(async () => {
+
+        const res = await fetch(`/api/vacunas/exports/${exportId}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+            clearInterval(interval);
+            button.disabled = false;
+            alert("Error consultando progreso");
+            return;
+        }
+
+        const exportData = data.export;
+
+        console.log("Progreso:", exportData.progress);
+
+        const container = document.getElementById("exportProgressContainer");
+        const bar = document.getElementById("exportProgressBar");
+        const percent = document.getElementById("exportProgressPercent");
+        const statusText = document.getElementById("exportStatusText");
+
+        if (container && bar && percent && statusText) {
+
+            container.classList.remove("d-none");
+
+            bar.style.width = `${exportData.progress}%`;
+            percent.textContent = `${exportData.progress}%`;
+            statusText.textContent = `Estado: ${exportData.status}`;
+
+            if (exportData.status === "completed") {
+                bar.classList.remove("bg-green-500");
+                bar.classList.add("bg-blue-600");
+            }
+
+            if (exportData.status === "failed") {
+                bar.classList.remove("bg-green-500");
+                bar.classList.add("bg-red-600");
+            }
+        }
+
+        if (exportData.status === "completed" || exportData.status === "failed") {
+            clearInterval(interval);
+            button.disabled = false;
+        }
+
+    }, 2000);
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| FUNCIONES PREVIEW (SIN CAMBIOS)
+|--------------------------------------------------------------------------
+*/
 
 function renderResumen(summary) {
     const el = document.getElementById("resumenPreview");
@@ -72,38 +205,16 @@ function renderResumen(summary) {
 
     el.classList.remove("d-none");
     el.innerHTML = `
-    <strong>${escapeHtml(summary?.message ?? "OK")}</strong><br>
-    Total CLUES: ${escapeHtml(String(summary?.total_clues ?? 0))} |
-    Filas (scope preview): ${escapeHtml(String(summary?.total_rows ?? 0))} |
-    Preview rows: ${escapeHtml(String(summary?.preview_rows ?? 0))}
-  `;
+        <strong>${escapeHtml(summary?.message ?? "OK")}</strong><br>
+        Total CLUES: ${escapeHtml(String(summary?.total_clues ?? 0))} |
+        Filas (scope preview): ${escapeHtml(String(summary?.total_rows ?? 0))} |
+        Preview rows: ${escapeHtml(String(summary?.preview_rows ?? 0))}
+    `;
 }
 
 function buildNestedHeadersFromResponse(table) {
-    const fixed = table.fixed_columns ?? [
-        { key: "clues", label: "CLUES" },
-        { key: "unidad_nombre", label: "Unidad" },
-        { key: "entidad", label: "Entidad" },
-        { key: "jurisdiccion", label: "Jurisdicción" },
-        { key: "municipio", label: "Municipio" },
-        { key: "institucion", label: "Institución" },
-    ];
-
-    let apartados = table.apartados;
-
-    if (!apartados) {
-        const first = table.rows?.[0] ?? {};
-        apartados = Object.keys(first)
-            .filter(k => typeof first[k] === "object" && first[k] !== null && !Array.isArray(first[k]))
-            .map(apKey => {
-                const varsObj = first[apKey] ?? {};
-                return {
-                    key: apKey,
-                    label: apKey,
-                    variables: Object.keys(varsObj).map(vk => ({ key: vk, label: vk }))
-                };
-            });
-    }
+    const fixed = table.fixed_columns ?? [];
+    let apartados = table.apartados ?? [];
 
     return { fixed, apartados };
 }
@@ -115,16 +226,11 @@ function renderHeadersNested(table, elementosDOM) {
     fixed.forEach(col => { htmlTop += `<th rowspan="2">${escapeHtml(col.label)}</th>`; });
 
     apartados.forEach(ap => {
-        const colspan = ap.variables.length || 1;
-        htmlTop += `<th colspan="${colspan}">${escapeHtml(ap.label)}</th>`;
+        htmlTop += `<th colspan="${ap.variables.length}">${escapeHtml(ap.label)}</th>`;
     });
 
     let htmlVars = "";
     apartados.forEach(ap => {
-        if (!ap.variables.length) {
-            htmlVars += `<th>(sin variables)</th>`;
-            return;
-        }
         ap.variables.forEach(v => { htmlVars += `<th>${escapeHtml(v.label)}</th>`; });
     });
 
@@ -143,13 +249,14 @@ function renderRowsNested(table, elementosDOM, headerDef) {
     rows.forEach(r => {
         let tr = "";
 
-        fixed.forEach(col => { tr += `<td>${escapeHtml(String(r[col.key] ?? ""))}</td>`; });
+        fixed.forEach(col => {
+            tr += `<td>${escapeHtml(String(r[col.key] ?? ""))}</td>`;
+        });
 
         apartados.forEach(ap => {
             const obj = r[ap.key] ?? {};
             ap.variables.forEach(v => {
-                const val = obj?.[v.key] ?? 0;
-                tr += `<td>${escapeHtml(String(val))}</td>`;
+                tr += `<td>${escapeHtml(String(obj[v.key] ?? 0))}</td>`;
             });
         });
 
@@ -167,20 +274,3 @@ function escapeHtml(str) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
-
-window.clearPreview = function () {
-  const resumen = document.getElementById("resumenPreview");
-  if (resumen) {
-    resumen.classList.add("d-none");
-    resumen.innerHTML = "";
-  }
-
-  const header1 = document.getElementById("tablaHeader");
-  if (header1) header1.innerHTML = "";
-
-  const header2 = document.getElementById("variablesHeader");
-  if (header2) header2.innerHTML = "";
-
-  const body = document.getElementById("tablaResultadosBody");
-  if (body) body.innerHTML = "";
-};

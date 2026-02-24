@@ -68,7 +68,24 @@
                 </button>
             </div>
 
-            <div id="resumenPreview" class="alert alert-info d-none mt-3"></div>
+            <div id="exportProgressContainer" class="d-none mt-3">
+    
+    <div class="mb-2 text-sm font-medium text-gray-700">
+        <span id="exportStatusText">Procesando...</span>
+    </div>
+
+    <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+        <div id="exportProgressBar"
+             class="h-4 bg-green-500 transition-all duration-500 ease-out"
+             style="width: 0%">
+        </div>
+    </div>
+
+    <div class="mt-1 text-sm text-gray-600">
+        <span id="exportProgressPercent">0%</span>
+    </div>
+
+</div>
 
             <div class="table-responsive mt-3">
                 <table class="table table-bordered table-striped" id="tablaResultados">
