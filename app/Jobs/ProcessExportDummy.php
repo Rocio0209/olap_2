@@ -15,24 +15,22 @@ class ProcessExportDummy implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
     public int $exportId;
+    public int $step;
 
-    public function __construct(int $exportId)
-    {
-        $this->exportId = $exportId;
-    }
+    public function __construct(int $exportId, int $step)
+{
+    $this->exportId = $exportId;
+    $this->step = $step;
+}
 
     public function handle(): void
-    {
-        $export = Export::find($this->exportId);
-        if (!$export) return;
+{
+    // Simular trabajo pesado
+    sleep(2);
 
-        $export->update([
-            'progress' => 50,
-        ]);
+    logger()->info("Ejecutando Job paso {$this->step}");
 
-        sleep(2); // simula trabajo
-
-    }
+}
 
     public function failed(\Throwable $e): void
     {

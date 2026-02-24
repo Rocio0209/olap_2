@@ -45,7 +45,9 @@ public function store(Request $request)
     // \App\Jobs\ProcessExportDummy::dispatch($export->id)->onQueue('exports');
 
     $batch = Bus::batch([
-        new \App\Jobs\ProcessExportDummy($export->id),
+        new \App\Jobs\ProcessExportDummy($export->id, 1),
+        new \App\Jobs\ProcessExportDummy($export->id, 2),
+        new \App\Jobs\ProcessExportDummy($export->id, 3),
     ])
     ->then(function (Batch $batch) use ($export) {
         $export->update([
@@ -78,17 +80,42 @@ public function store(Request $request)
 
     // GET /api/vacunas/exports/{id}
     public function show($id)
-    {
-        $export = Export::findOrFail($id);
+{
+    $export = Export::findOrFail($id);
 
-        return response()->json([
-            'ok' => true,
-            'export' => [
-                'id' => $export->id,
-                'status' => $export->status,
-                'progress' => $export->progress,
-                'error' => $export->error,
-            ],
-        ]);
+    $progress = $export->progress;
+
+    if ($export->batch_id) {
+        $batch = Bus::findBatch($export->batch_id);
+
+        if ($batch) {
+            $progress = $batch->progress();
+
+            // Si terminó correctamente
+            if ($batch->finished() && !$batch->hasFailures()) {
+                $export->update([
+                    'status' => 'completed',
+                    'progress' => 100,
+                ]);
+            }
+
+            // Si falló
+            if ($batch->hasFailures()) {
+                $export->update([
+                    'status' => 'failed',
+                ]);
+            }
+        }
     }
+
+    return response()->json([
+        'ok' => true,
+        'export' => [
+            'id' => $export->id,
+            'status' => $export->status,
+            'progress' => $progress,
+            'error' => $export->error,
+        ],
+    ]);
+}
 }
