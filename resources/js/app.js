@@ -5,6 +5,7 @@ window.$ = jQuery;
 
 //Vacunas
 import './vacunas/biologicos-preview.js';
+import './vacunas/biologicos-export.js';
 import './vacunas/clues-bootstrap.js';
 import './vacunas/sis-cubo.js';
 
