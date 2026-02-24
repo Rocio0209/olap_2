@@ -63,6 +63,9 @@
                 <button id="btnConsultarPreview" class="btn btn-primary">
                     Consultar (Preview)
                 </button>
+                <button id="btnExportarExcel" class="btn btn-success ms-2">
+                    Exportar a Excel
+                </button>
             </div>
 
             <div id="resumenPreview" class="alert alert-info d-none mt-3"></div>

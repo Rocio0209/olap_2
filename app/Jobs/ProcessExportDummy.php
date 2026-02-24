@@ -8,10 +8,11 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Bus\Batchable;
 
 class ProcessExportDummy implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
     public int $exportId;
 
@@ -26,18 +27,11 @@ class ProcessExportDummy implements ShouldQueue
         if (!$export) return;
 
         $export->update([
-            'status' => 'processing',
-            'progress' => 10,
+            'progress' => 50,
         ]);
 
-        $export->update([
-            'progress' => 60,
-        ]);
+        sleep(2); // simula trabajo
 
-        $export->update([
-            'status' => 'completed',
-            'progress' => 100,
-        ]);
     }
 
     public function failed(\Throwable $e): void
