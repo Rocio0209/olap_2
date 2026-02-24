@@ -9,6 +9,7 @@ use App\Models\Export;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Bus\Batch;
 use Throwable;
+use Illuminate\Support\Facades\Storage;
 
 class ExportsController extends Controller
 {
@@ -50,11 +51,18 @@ public function store(Request $request)
         new \App\Jobs\ProcessExportDummy($export->id, 3),
     ])
     ->then(function (Batch $batch) use ($export) {
-        $export->update([
-            'status' => 'completed',
-            'progress' => 100,
-        ]);
-    })
+
+    // Crear archivo dummy
+    $filename = "exports/final/export_{$export->id}.txt";
+
+    Storage::put($filename, "Export ID: {$export->id}\nCompletado correctamente.");
+
+    $export->update([
+        'status' => 'completed',
+        'progress' => 100,
+        'final_path' => $filename,
+    ]);
+})
     ->catch(function (Batch $batch, Throwable $e) use ($export) {
         $export->update([
             'status' => 'failed',
