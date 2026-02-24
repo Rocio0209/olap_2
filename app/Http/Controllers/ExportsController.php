@@ -118,4 +118,28 @@ public function store(Request $request)
         ],
     ]);
 }
+
+public function download($id)
+{
+    $export = Export::findOrFail($id);
+
+    if ($export->status !== 'completed') {
+        return response()->json([
+            'ok' => false,
+            'message' => 'El export aún no está listo.'
+        ], 400);
+    }
+
+    if (!$export->final_path || !file_exists(storage_path("app/".$export->final_path))) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Archivo no encontrado.'
+        ], 404);
+    }
+
+    return response()->download(
+        storage_path("app/".$export->final_path)
+    );
+}
+
 }

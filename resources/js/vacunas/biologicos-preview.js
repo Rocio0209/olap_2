@@ -184,10 +184,25 @@ function startPolling(exportId, button) {
             }
         }
 
-        if (exportData.status === "completed" || exportData.status === "failed") {
-            clearInterval(interval);
-            button.disabled = false;
-        }
+        if (exportData.status === "completed") {
+
+    clearInterval(interval);
+    button.disabled = false;
+
+    const downloadBtn = document.getElementById("btnDownloadExcel");
+    if (downloadBtn) {
+        downloadBtn.classList.remove("hidden");
+
+        downloadBtn.onclick = () => {
+            window.location.href = `/api/vacunas/exports/${exportId}/download`;
+        };
+    }
+}
+
+if (exportData.status === "failed") {
+    clearInterval(interval);
+    button.disabled = false;
+}
 
     }, 2000);
 }

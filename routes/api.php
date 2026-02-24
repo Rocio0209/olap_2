@@ -16,3 +16,5 @@ Route::get('vacunas/catalogos_y_cubos_sis', [BiologicosController::class, 'catal
 Route::post('vacunas/exports', [ExportsController::class, 'store']);
 
 Route::get('vacunas/exports/{id}', [ExportsController::class, 'show']);
+
+Route::get('vacunas/exports/{id}/download', [ExportsController::class, 'download']);
