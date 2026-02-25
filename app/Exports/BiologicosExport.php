@@ -2,31 +2,41 @@
 
 namespace App\Exports;
 
-use Maatwebsite\Excel\Concerns\FromArray;
+use Generator;
+use Maatwebsite\Excel\Concerns\FromGenerator;
 
-class BiologicosExport implements FromArray
+class BiologicosExport implements FromGenerator
 {
-    protected array $data;
+    protected string $tmpPath;
 
-    public function __construct(array $apiResponse)
+    public function __construct(string $tmpPath)
     {
-        $this->data = $apiResponse['resultados'] ?? [];
+        $this->tmpPath = $tmpPath;
     }
 
-    public function array(): array
-    {
-        $rows = [];
+    public function generator(): Generator
+{
+    $files = glob(storage_path("app/{$this->tmpPath}/*.jsonl"));
+    sort($files);
 
-        /*
-        |--------------------------------------------------------------------------
-        | 1️⃣ Construir encabezados dinámicos
-        |--------------------------------------------------------------------------
-        */
+    $dynamicHeaders = [];
 
-        $dynamicHeaders = [];
+    /*
+    |--------------------------------------------------------------------------
+    | 1️⃣ Primera pasada: solo construir headers
+    |--------------------------------------------------------------------------
+    */
 
-        foreach ($this->data as $resultado) {
-            foreach ($resultado['biologicos'] as $bio) {
+    foreach ($files as $file) {
+
+        $handle = fopen($file, 'r');
+
+        while (($line = fgets($handle)) !== false) {
+
+            $decoded = json_decode(trim($line), true);
+            if (!$decoded) continue;
+
+            foreach ($decoded['biologicos'] as $bio) {
                 foreach ($bio['grupos'] as $grupo) {
                     foreach ($grupo['variables'] as $variable) {
 
@@ -42,50 +52,56 @@ class BiologicosExport implements FromArray
             }
         }
 
-        $dynamicHeaders = array_values($dynamicHeaders);
+        fclose($handle);
+    }
 
-        /*
-        |--------------------------------------------------------------------------
-        | 2️⃣ Encabezados finales
-        |--------------------------------------------------------------------------
-        */
+    $dynamicHeaders = array_values($dynamicHeaders);
 
-        $headers = array_merge(
-            [
-                'CLUES',
-                'Unidad',
-                'Entidad',
-                'Jurisdicción',
-                'Municipio',
-                'Institución',
-            ],
-            $dynamicHeaders
-        );
+    /*
+    |--------------------------------------------------------------------------
+    | 2️⃣ Yield encabezados
+    |--------------------------------------------------------------------------
+    */
 
-        $rows[] = $headers;
+    yield array_merge(
+        [
+            'CLUES',
+            'Unidad',
+            'Entidad',
+            'Jurisdicción',
+            'Municipio',
+            'Institución',
+        ],
+        $dynamicHeaders
+    );
 
-        /*
-        |--------------------------------------------------------------------------
-        | 3️⃣ Construir filas
-        |--------------------------------------------------------------------------
-        */
+    /*
+    |--------------------------------------------------------------------------
+    | 3️⃣ Segunda pasada: stream real
+    |--------------------------------------------------------------------------
+    */
 
-        foreach ($this->data as $resultado) {
+    foreach ($files as $file) {
 
-            $row = [];
+        $handle = fopen($file, 'r');
 
-            // Datos fijos
-            $row[] = $resultado['clues'] ?? '';
-            $row[] = $resultado['unidad']['nombre'] ?? '';
-            $row[] = $resultado['unidad']['entidad'] ?? '';
-            $row[] = $resultado['unidad']['jurisdiccion'] ?? '';
-            $row[] = $resultado['unidad']['municipio'] ?? '';
-            $row[] = $resultado['unidad']['institucion'] ?? '';
+        while (($line = fgets($handle)) !== false) {
 
-            // Inicializar dinámicos en 0
+            $decoded = json_decode(trim($line), true);
+            if (!$decoded) continue;
+
+            $row = [
+                $decoded['clues'] ?? '',
+                $decoded['unidad']['nombre'] ?? '',
+                $decoded['unidad']['entidad'] ?? '',
+                $decoded['unidad']['jurisdiccion'] ?? '',
+                $decoded['unidad']['municipio'] ?? '',
+                $decoded['unidad']['institucion'] ?? '',
+            ];
+
             $dynamicValues = array_fill_keys($dynamicHeaders, 0);
 
-            foreach ($resultado['biologicos'] as $bio) {
+            foreach ($decoded['biologicos'] as $bio) {
                 foreach ($bio['grupos'] as $grupo) {
                     foreach ($grupo['variables'] as $variable) {
 
@@ -100,11 +116,10 @@ class BiologicosExport implements FromArray
                 }
             }
 
-            $row = array_merge($row, array_values($dynamicValues));
-
-            $rows[] = $row;
+            yield array_merge($row, array_values($dynamicValues));
         }
 
-        return $rows;
+        fclose($handle);
     }
+}
 }

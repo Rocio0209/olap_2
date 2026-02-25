@@ -31,7 +31,7 @@ class BuildExcelFromParts implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | 1️⃣ Leer todos los jsonl
+        | 1️⃣ Validar carpeta tmp
         |--------------------------------------------------------------------------
         */
 
@@ -41,48 +41,23 @@ class BuildExcelFromParts implements ShouldQueue
             throw new \Exception("Carpeta temporal no encontrada.");
         }
 
-        $files = Storage::disk('local')->files($tmpPath);
-
-        $allResultados = [];
-
-        foreach ($files as $file) {
-
-            $content = Storage::disk('local')->get($file);
-            $lines = explode(PHP_EOL, $content);
-
-            foreach ($lines as $line) {
-
-                if (empty(trim($line))) continue;
-
-                $decoded = json_decode($line, true);
-
-                if (is_array($decoded)) {
-                    $allResultados[] = $decoded;
-                }
-            }
-        }
-
         /*
         |--------------------------------------------------------------------------
-        | 2️⃣ Generar Excel final
+        | 2️⃣ Generar Excel en streaming (sin cargar todo en RAM)
         |--------------------------------------------------------------------------
         */
-
-        $finalData = [
-            'resultados' => $allResultados
-        ];
 
         $finalPath = "exports/final/biologicos_{$this->exportId}.xlsx";
 
         Excel::store(
-            new BiologicosExport($finalData),
+            new BiologicosExport($tmpPath), // 🔥 ahora recibe ruta, no array
             $finalPath,
             'local'
         );
 
         /*
         |--------------------------------------------------------------------------
-        | 3️⃣ Borrar carpeta tmp
+        | 3️⃣ Eliminar carpeta temporal
         |--------------------------------------------------------------------------
         */
 
@@ -90,7 +65,7 @@ class BuildExcelFromParts implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | 4️⃣ Actualizar export
+        | 4️⃣ Actualizar estado
         |--------------------------------------------------------------------------
         */
 
