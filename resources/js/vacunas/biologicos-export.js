@@ -94,7 +94,7 @@ function startPolling(exportId, button) {
 
         const exportData = data.export;
 
-        updateProgressBar(exportData.progress);
+updateProgressBar(parseInt(exportData.progress));
 
         if (exportData.status === "completed") {
             clearInterval(currentInterval);
@@ -119,19 +119,21 @@ function updateProgressBar(progress) {
 
     if (!bar || !percent) return;
 
+    progress = Math.max(0, Math.min(100, progress));
+
     bar.style.width = `${progress}%`;
     percent.textContent = `${progress}%`;
 
-    let color = "var(--colorInstitucional7)"; // 🔴 rojo institucional
+    let color;
 
     if (progress <= 33) {
-        color = "var(--colorInstitucional7)";
+        bar.style.backgroundColor = "#A02142"; // rojo institucional
     }
     else if (progress < 100) {
-        color = "var(--colorInstitucional4)"; // 🟡 dorado institucional
+        bar.style.backgroundColor = "#BC955B"; // dorado institucional
     }
     else {
-        color = "var(--colorInstitucional11)"; // 🟢 verde institucional
+        bar.style.backgroundColor = "#235C4F"; // verde institucional
     }
 
     bar.style.backgroundColor = color;

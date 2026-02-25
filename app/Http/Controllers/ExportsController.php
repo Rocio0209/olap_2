@@ -8,6 +8,8 @@ use App\Models\Export;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Bus\Batch;
 use Throwable;
+use App\Jobs\FetchTransformChunk;
+use App\Jobs\BuildExcelFromParts;
 
 class ExportsController extends Controller
 {
@@ -45,37 +47,51 @@ class ExportsController extends Controller
             ],
         ]);
 
+        $clues = $request->clues;
         /*
         |--------------------------------------------------------------------------
-        | Batch
+        | 1️⃣ Dividir CLUES en chunks de 20
         |--------------------------------------------------------------------------
-        | El Job es el que genera el Excel y guarda final_path
-        | Aquí ya NO generamos TXT ni tocamos final_path
         */
 
-        $batch = Bus::batch([
-            new \App\Jobs\ProcessExportDummy($export->id),
-        ])
-        ->then(function (Batch $batch) use ($export) {
+        $chunks = array_chunk($clues, 20);
 
-            // Solo aseguramos estado final
-            $export->update([
-                'status' => 'completed',
-                'progress' => 100,
-            ]);
-        })
-        ->catch(function (Batch $batch, Throwable $e) use ($export) {
+        $jobs = [];
 
-            $export->update([
-                'status' => 'failed',
-                'error' => $e->getMessage(),
-            ]);
-        })
-        ->dispatch();
+        foreach ($chunks as $index => $chunk) {
+            $jobs[] = new FetchTransformChunk(
+                $export->id,
+                $chunk,
+                $index
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 2️⃣ Agregar Job final que construirá el Excel
+        |--------------------------------------------------------------------------
+        */
+
+        $jobs[] = new BuildExcelFromParts($export->id);
+
+        /*
+        |--------------------------------------------------------------------------
+        | 3️⃣ Crear Batch
+        |--------------------------------------------------------------------------
+        */
+
+        $batch = Bus::batch($jobs)
+            ->catch(function (Batch $batch, Throwable $e) use ($export) {
+                $export->update([
+                    'status' => 'failed',
+                    'error'  => $e->getMessage(),
+                ]);
+            })
+            ->dispatch();
 
         $export->update([
             'batch_id' => $batch->id,
-            'status' => 'processing',
+            'status'   => 'processing',
         ]);
 
         return response()->json([
@@ -94,43 +110,47 @@ class ExportsController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function show($id)
-    {
-        $export = Export::findOrFail($id);
+public function show($id)
+{
+    $export = Export::findOrFail($id);
 
-        $progress = $export->progress;
+    $progress = $export->progress;
 
-        if ($export->batch_id) {
-            $batch = Bus::findBatch($export->batch_id);
+    if ($export->batch_id) {
 
-            if ($batch) {
-                $progress = $batch->progress();
+        $batch = Bus::findBatch($export->batch_id);
 
-                if ($batch->finished() && !$batch->hasFailures()) {
-                    $export->update([
-                        'status' => 'completed',
-                        'progress' => 100,
-                    ]);
-                }
+        if ($batch) {
 
-                if ($batch->hasFailures()) {
-                    $export->update([
-                        'status' => 'failed',
-                    ]);
-                }
+            $progress = $batch->progress(); // 🔥 progreso real
+
+            // Si terminó correctamente
+            if ($batch->finished() && !$batch->hasFailures()) {
+                $export->update([
+                    'status'   => 'completed',
+                    'progress' => 100,
+                ]);
+            }
+
+            // Si falló
+            if ($batch->hasFailures()) {
+                $export->update([
+                    'status' => 'failed',
+                ]);
             }
         }
-
-        return response()->json([
-            'ok' => true,
-            'export' => [
-                'id' => $export->id,
-                'status' => $export->status,
-                'progress' => $progress,
-                'error' => $export->error,
-            ],
-        ]);
     }
+
+    return response()->json([
+        'ok' => true,
+        'export' => [
+            'id'       => $export->id,
+            'status'   => $export->status,
+            'progress' => (int) $progress,
+            'error'    => $export->error,
+        ],
+    ]);
+}
 
     /*
     |--------------------------------------------------------------------------
