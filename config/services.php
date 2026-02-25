@@ -9,9 +9,12 @@ return [
         'scheme' => 'https',
     ],
     'vacunas_api' => [
-        'url' => env('VACUNAS_API_URL'),
-        'token' => env('VACUNAS_API_TOKEN'),
+    'url' => env('VACUNAS_API_URL'),
+    'endpoints' => [
+        'biologicos' => env('VACUNAS_API_BIOLOGICOS'),
     ],
+    'token' => env('VACUNAS_API_TOKEN'),
+],
 
 
 ];
