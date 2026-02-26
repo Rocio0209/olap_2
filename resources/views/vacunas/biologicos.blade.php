@@ -64,10 +64,13 @@
                 <button id="btnConsultarPreview" class="btn btn-primary">
                     Consultar (Preview)
                 </button>
-                <button id="btnExportarExcel" class="btn btn-success ms-2">
+                <button id="btnExportarExcel" class="btn btn-success ms-2 d-none">
                     Exportar a Excel
                 </button>
-                
+                <button id="btnDownloadExcel" class="btn btn-danger ms-2 d-none">
+                    Descargar Excel
+                </button>
+
             </div>
             <x-progress-bar />
 
@@ -93,5 +96,4 @@
 
 
     {{-- <x-precarga></x-precarga> --}}
-    </div>
 </x-app-layout>

@@ -51,6 +51,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 
+
+
+/*
+|--------------------------------------------------------------------------
+| Reset Progress Bar
+|--------------------------------------------------------------------------
+*/
+
 function resetProgressBar() {
 
     const container = document.getElementById("exportProgressContainer");
@@ -60,18 +68,25 @@ function resetProgressBar() {
 
     if (!container || !bar || !percent) return;
 
-    container.classList.remove("hidden");
+    container.classList.remove("d-none");
 
     bar.style.width = "0%";
     percent.textContent = "0%";
 
-    // 🔥 Sobrescribe todas las clases
-    bar.className = "h-6 transition-all duration-700 ease-out bg-rose-800";
+    // color inicial rojo institucional
+    bar.style.backgroundColor = "#A02142";
 
-    if (downloadBtn) {
-        downloadBtn.classList.add("hidden");
-    }
+    // ocultar botón descarga
+    downloadBtn?.classList.add("d-none");
 }
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Polling
+|--------------------------------------------------------------------------
+*/
 
 function startPolling(exportId, button) {
 
@@ -93,10 +108,12 @@ function startPolling(exportId, button) {
         }
 
         const exportData = data.export;
+        console.log("Progreso recibido:", exportData.progress);
 
-updateProgressBar(parseInt(exportData.progress));
+        updateProgressBar(parseInt(exportData.progress));
 
         if (exportData.status === "completed") {
+            document.getElementById("btnDownloadExcel")?.classList.add("d-none");
             clearInterval(currentInterval);
             currentInterval = null;
             button.disabled = false;
@@ -107,11 +124,19 @@ updateProgressBar(parseInt(exportData.progress));
             clearInterval(currentInterval);
             currentInterval = null;
             button.disabled = false;
+            alert("La exportación falló.");
         }
 
     }, 2000);
 }
 
+
+
+/*
+|--------------------------------------------------------------------------
+| Update Progress Bar
+|--------------------------------------------------------------------------
+*/
 function updateProgressBar(progress) {
 
     const bar = document.getElementById("exportProgressBar");
@@ -124,26 +149,31 @@ function updateProgressBar(progress) {
     bar.style.width = `${progress}%`;
     percent.textContent = `${progress}%`;
 
-    let color;
-
     if (progress <= 33) {
-        bar.style.backgroundColor = "#A02142"; // rojo institucional
+        bar.style.backgroundColor = "#A02142"; // rojo
     }
     else if (progress < 100) {
-        bar.style.backgroundColor = "#BC955B"; // dorado institucional
+        bar.style.backgroundColor = "#BC955B"; // dorado
     }
     else {
-        bar.style.backgroundColor = "#235C4F"; // verde institucional
+        bar.style.backgroundColor = "#235C4F"; // verde
     }
-
-    bar.style.backgroundColor = color;
 }
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Show Download Button
+|--------------------------------------------------------------------------
+*/
+
 function showDownloadButton(exportId) {
 
     const downloadBtn = document.getElementById("btnDownloadExcel");
     if (!downloadBtn) return;
 
-    downloadBtn.classList.remove("hidden");
+    downloadBtn.classList.remove("d-none");
 
     downloadBtn.onclick = () => {
         window.location.href = `/api/vacunas/exports/${exportId}/download`;

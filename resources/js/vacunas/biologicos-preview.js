@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
     */
 
     const btnPreview = document.getElementById("btnConsultarPreview");
+
     if (btnPreview && btnPreview.dataset.bound !== "1") {
 
         btnPreview.dataset.bound = "1";
@@ -25,6 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 if (!clues.length) {
                     alert("Selecciona al menos 1 CLUES.");
+                    btnPreview.disabled = false;
                     return;
                 }
 
@@ -45,9 +47,28 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
+                /*
+                |--------------------------------------------------------------------------
+                | Control de botones
+                |--------------------------------------------------------------------------
+                */
+
+                // Ocultar descargar si existía de export previo
+                document.getElementById("btnDownloadExcel")?.classList.add("d-none");
+
+                // Mostrar exportar
+                document.getElementById("btnExportarExcel")?.classList.remove("d-none");
+
+                /*
+                |--------------------------------------------------------------------------
+                | Render preview
+                |--------------------------------------------------------------------------
+                */
+
                 renderResumen(data.summary);
 
                 const table = data.table;
+
                 const headerDef = renderHeadersNested(table, {
                     tablaHeader: document.getElementById("tablaHeader"),
                     variablesHeader: document.getElementById("variablesHeader"),
@@ -56,6 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 renderRowsNested(table, {
                     tablaResultadosBody: document.getElementById("tablaResultadosBody"),
                 }, headerDef);
+
                 document.getElementById("previewContainer")?.classList.remove("d-none");
 
             } catch (e) {
@@ -67,11 +89,21 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 });
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Render Headers
+|--------------------------------------------------------------------------
+*/
+
 function renderHeadersNested(table, elementosDOM) {
 
     const { fixed, apartados } = buildNestedHeadersFromResponse(table);
 
     let htmlTop = "";
+
     fixed.forEach(col => {
         htmlTop += `<th rowspan="2">${escapeHtml(col.label)}</th>`;
     });
@@ -83,6 +115,7 @@ function renderHeadersNested(table, elementosDOM) {
     });
 
     let htmlVars = "";
+
     apartados.forEach(ap => {
         ap.variables.forEach(v => {
             htmlVars += `<th>${escapeHtml(v.label)}</th>`;
@@ -94,6 +127,15 @@ function renderHeadersNested(table, elementosDOM) {
 
     return { fixed, apartados };
 }
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Render Rows
+|--------------------------------------------------------------------------
+*/
+
 function renderRowsNested(table, elementosDOM, headerDef) {
 
     const { fixed, apartados } = headerDef;
@@ -122,11 +164,19 @@ function renderRowsNested(table, elementosDOM, headerDef) {
     elementosDOM.tablaResultadosBody.innerHTML = html;
 }
 
+
+
+/*
+|--------------------------------------------------------------------------
+| Render Resumen
+|--------------------------------------------------------------------------
+*/
+
 function renderResumen(summary) {
     const el = document.getElementById("resumenPreview");
     if (!el) return;
 
-    el.classList.remove("hidden");
+    el.classList.remove("d-none");
 
     el.innerHTML = `
         <strong>${escapeHtml(summary?.message ?? "OK")}</strong><br>
@@ -135,6 +185,15 @@ function renderResumen(summary) {
         Preview rows: ${escapeHtml(String(summary?.preview_rows ?? 0))}
     `;
 }
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
 function escapeHtml(str) {
     return String(str)
         .replaceAll("&", "&amp;")
@@ -143,16 +202,29 @@ function escapeHtml(str) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
+
 function buildNestedHeadersFromResponse(table) {
     const fixed = table.fixed_columns ?? [];
     let apartados = table.apartados ?? [];
     return { fixed, apartados };
 }
-// 👇 AGREGA ESTO AL FINAL
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Clear Preview Global
+|--------------------------------------------------------------------------
+*/
+
 window.clearPreview = function () {
 
     const container = document.getElementById("previewContainer");
     const resumen = document.getElementById("resumenPreview");
+
+    // Ocultar botones
+    document.getElementById("btnExportarExcel")?.classList.add("d-none");
+    document.getElementById("btnDownloadExcel")?.classList.add("d-none");
 
     if (container) {
         container.classList.add("d-none");
