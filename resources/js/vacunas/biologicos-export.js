@@ -1,4 +1,6 @@
 let currentInterval = null;
+let currentDisplayedProgress = 0;
+let progressAnimationFrame = null;
 
 console.log("Biologicos Export cargado correctamente 🚀");
 
@@ -70,11 +72,19 @@ function resetProgressBar() {
 
     container.classList.remove("d-none");
 
+    if (progressAnimationFrame) {
+        cancelAnimationFrame(progressAnimationFrame);
+        progressAnimationFrame = null;
+    }
+
+    currentDisplayedProgress = 0;
     bar.style.width = "0%";
     percent.textContent = "0%";
+    bar.setAttribute("aria-valuenow", "0");
 
     // color inicial rojo institucional
     bar.style.backgroundColor = "#A02142";
+    bar.classList.add("progress-bar-striped", "progress-bar-animated");
 
     // ocultar botón descarga
     downloadBtn?.classList.add("d-none");
@@ -110,14 +120,16 @@ function startPolling(exportId, button) {
         const exportData = data.export;
         console.log("Progreso recibido:", exportData.progress);
 
-        updateProgressBar(parseInt(exportData.progress));
+        updateProgressBar(Number.parseInt(exportData.progress, 10));
 
         if (exportData.status === "completed") {
-            document.getElementById("btnDownloadExcel")?.classList.add("d-none");
             clearInterval(currentInterval);
             currentInterval = null;
-            button.disabled = false;
-            showDownloadButton(exportId);
+            updateProgressBar(100);
+            setTimeout(() => {
+                button.disabled = false;
+                showDownloadButton(exportId);
+            }, 400);
         }
 
         if (exportData.status === "failed") {
@@ -144,10 +156,55 @@ function updateProgressBar(progress) {
 
     if (!bar || !percent) return;
 
-    progress = Math.max(0, Math.min(100, progress));
+    if (!Number.isFinite(progress)) {
+        return;
+    }
 
-    bar.style.width = `${progress}%`;
-    percent.textContent = `${progress}%`;
+    const targetProgress = Math.max(0, Math.min(100, progress));
+    const startProgress = currentDisplayedProgress;
+    const delta = targetProgress - startProgress;
+
+    if (Math.abs(delta) < 0.1) {
+        renderProgressState(targetProgress, bar, percent);
+        currentDisplayedProgress = targetProgress;
+        return;
+    }
+
+    if (progressAnimationFrame) {
+        cancelAnimationFrame(progressAnimationFrame);
+    }
+
+    const duration = Math.min(900, Math.max(300, Math.abs(delta) * 25));
+    const startedAt = performance.now();
+
+    const step = (now) => {
+        const elapsed = now - startedAt;
+        const t = Math.min(1, elapsed / duration);
+
+        // Ease-out para sensación fluida al aproximarse al objetivo.
+        const eased = 1 - Math.pow(1 - t, 3);
+        const interpolated = startProgress + delta * eased;
+
+        renderProgressState(interpolated, bar, percent);
+
+        if (t < 1) {
+            progressAnimationFrame = requestAnimationFrame(step);
+            return;
+        }
+
+        currentDisplayedProgress = targetProgress;
+        progressAnimationFrame = null;
+    };
+
+    progressAnimationFrame = requestAnimationFrame(step);
+}
+
+function renderProgressState(progress, bar, percent) {
+    const rounded = Math.round(progress);
+
+    bar.style.width = `${progress.toFixed(1)}%`;
+    percent.textContent = `${rounded}%`;
+    bar.setAttribute("aria-valuenow", String(rounded));
 
     if (progress <= 33) {
         bar.style.backgroundColor = "#A02142"; // rojo
@@ -157,6 +214,7 @@ function updateProgressBar(progress) {
     }
     else {
         bar.style.backgroundColor = "#235C4F"; // verde
+        bar.classList.remove("progress-bar-animated");
     }
 }
 

@@ -4,8 +4,11 @@
         
         <div class="progress" style="height: 24px;">
             <div id="exportProgressBar"
-                 class="progress-bar"
+                 class="progress-bar progress-bar-striped progress-bar-animated"
                  role="progressbar"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 aria-valuenow="0"
                  style="width: 0%; background-color: #A02142;">
             </div>
         </div>
