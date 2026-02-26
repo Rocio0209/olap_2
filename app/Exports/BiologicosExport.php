@@ -181,6 +181,11 @@ class BiologicosExport implements FromGenerator, WithEvents
 
                 $sheet->getRowDimension(1)->setRowHeight(28);
                 $sheet->getRowDimension(2)->setRowHeight(64);
+
+                // Ancho fijo para columnas base (CLUES a Institucion).
+                foreach (range('A', 'F') as $baseCol) {
+                    $sheet->getColumnDimension($baseCol)->setWidth(11);
+                }
             },
         ];
     }
