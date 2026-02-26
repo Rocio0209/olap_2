@@ -42,8 +42,6 @@ class BiologicosExport implements FromGenerator
 
                         $headerKey = $bio['apartado']
                             . ' | '
-                            . $grupo['grupo']
-                            . ' | '
                             . $variable['variable'];
 
                         $dynamicHeaders[$headerKey] = $headerKey;
@@ -107,11 +105,9 @@ class BiologicosExport implements FromGenerator
 
                         $key = $bio['apartado']
                             . ' | '
-                            . $grupo['grupo']
-                            . ' | '
                             . $variable['variable'];
 
-                        $dynamicValues[$key] = $variable['total'] ?? 0;
+                        $dynamicValues[$key] = ($dynamicValues[$key] ?? 0) + ($variable['total'] ?? 0);
                     }
                 }
             }
