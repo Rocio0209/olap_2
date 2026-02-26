@@ -56,6 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 renderRowsNested(table, {
                     tablaResultadosBody: document.getElementById("tablaResultadosBody"),
                 }, headerDef);
+                document.getElementById("previewContainer")?.classList.remove("d-none");
 
             } catch (e) {
                 console.error(e);
@@ -147,3 +148,27 @@ function buildNestedHeadersFromResponse(table) {
     let apartados = table.apartados ?? [];
     return { fixed, apartados };
 }
+// 👇 AGREGA ESTO AL FINAL
+window.clearPreview = function () {
+
+    const container = document.getElementById("previewContainer");
+    const resumen = document.getElementById("resumenPreview");
+
+    if (container) {
+        container.classList.add("d-none");
+    }
+
+    if (resumen) {
+        resumen.classList.add("d-none");
+        resumen.innerHTML = "";
+    }
+
+    const header1 = document.getElementById("tablaHeader");
+    if (header1) header1.innerHTML = "";
+
+    const header2 = document.getElementById("variablesHeader");
+    if (header2) header2.innerHTML = "";
+
+    const body = document.getElementById("tablaResultadosBody");
+    if (body) body.innerHTML = "";
+};

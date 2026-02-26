@@ -71,7 +71,7 @@
             </div>
             <x-progress-bar />
 
-            <div class="table-responsive mt-3">
+            <div id="previewContainer" class="table-responsive mt-3">
                 <table class="table table-bordered table-striped" id="tablaResultados">
                     <thead>
                         <tr id="tablaHeader"></tr>
