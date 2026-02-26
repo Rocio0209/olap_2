@@ -186,6 +186,17 @@ class BiologicosExport implements FromGenerator, WithEvents
                 foreach (range('A', 'F') as $baseCol) {
                     $sheet->getColumnDimension($baseCol)->setWidth(11);
                 }
+
+                // Ancho fijo para columnas dinamicas (G en adelante).
+                for ($i = 7; $i <= $totalColumns; $i++) {
+                    $col = Coordinate::stringFromColumnIndex($i);
+                    $sheet->getColumnDimension($col)->setWidth(15);
+                }
+
+                // Refuerzo global de wrap para evitar texto encimado.
+                $sheet->getStyle("A1:{$lastCol}{$highestRow}")
+                    ->getAlignment()
+                    ->setWrapText(true);
             },
         ];
     }
