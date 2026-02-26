@@ -4,10 +4,32 @@ namespace App\Exports;
 
 use Generator;
 use Maatwebsite\Excel\Concerns\FromGenerator;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 
-class BiologicosExport implements FromGenerator
+class BiologicosExport implements FromGenerator, WithEvents
 {
     protected string $tmpPath;
+
+    /** @var array<int,string> */
+    protected array $fixedHeaders = [
+        'CLUES',
+        'Unidad',
+        'Entidad',
+        'Jurisdiccion',
+        'Municipio',
+        'Institucion',
+    ];
+
+    /**
+     * @var array<int,array{key:string,apartado:string,variable:string}>
+     */
+    protected array $dynamicColumns = [];
+
+    protected bool $headersPrepared = false;
 
     public function __construct(string $tmpPath)
     {
@@ -15,107 +37,237 @@ class BiologicosExport implements FromGenerator
     }
 
     public function generator(): Generator
-{
-    $files = glob(storage_path("app/{$this->tmpPath}/*.jsonl"));
-    sort($files);
+    {
+        $this->prepareHeaders();
 
-    $dynamicHeaders = [];
+        // Fila 1: apartados (los fijos quedan en fila 1 y se combinan con fila 2)
+        yield $this->buildTopHeaderRow();
 
-    /*
-    |--------------------------------------------------------------------------
-    | 1️⃣ Primera pasada: solo construir headers
-    |--------------------------------------------------------------------------
-    */
+        // Fila 2: variables
+        yield $this->buildVariableHeaderRow();
 
-    foreach ($files as $file) {
+        $files = glob(storage_path("app/{$this->tmpPath}/*.jsonl"));
+        sort($files);
 
-        $handle = fopen($file, 'r');
+        foreach ($files as $file) {
+            $handle = fopen($file, 'r');
 
-        while (($line = fgets($handle)) !== false) {
+            while (($line = fgets($handle)) !== false) {
+                $decoded = json_decode(trim($line), true);
+                if (!$decoded) {
+                    continue;
+                }
 
-            $decoded = json_decode(trim($line), true);
-            if (!$decoded) continue;
+                $row = [
+                    $decoded['clues'] ?? '',
+                    $decoded['unidad']['nombre'] ?? '',
+                    $decoded['unidad']['entidad'] ?? '',
+                    $decoded['unidad']['jurisdiccion'] ?? '',
+                    $decoded['unidad']['municipio'] ?? '',
+                    $decoded['unidad']['institucion'] ?? '',
+                ];
 
-            foreach ($decoded['biologicos'] as $bio) {
-                foreach ($bio['grupos'] as $grupo) {
-                    foreach ($grupo['variables'] as $variable) {
+                $dynamicValues = [];
+                foreach ($this->dynamicColumns as $col) {
+                    $dynamicValues[$col['key']] = 0;
+                }
 
-                        $headerKey = $bio['apartado']
-                            . ' | '
-                            . $variable['variable'];
+                foreach (($decoded['biologicos'] ?? []) as $bio) {
+                    $apartado = (string) ($bio['apartado'] ?? '');
 
-                        $dynamicHeaders[$headerKey] = $headerKey;
+                    foreach (($bio['grupos'] ?? []) as $grupo) {
+                        foreach (($grupo['variables'] ?? []) as $variable) {
+                            $variableLabel = (string) ($variable['variable'] ?? '');
+                            $key = $this->makeDynamicKey($apartado, $variableLabel);
+                            $dynamicValues[$key] = ($dynamicValues[$key] ?? 0) + (int) ($variable['total'] ?? 0);
+                        }
+                    }
+                }
+
+                $orderedValues = [];
+                foreach ($this->dynamicColumns as $col) {
+                    $orderedValues[] = $dynamicValues[$col['key']] ?? 0;
+                }
+
+                yield array_merge($row, $orderedValues);
+            }
+
+            fclose($handle);
+        }
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event): void {
+                $this->prepareHeaders();
+
+                $sheet = $event->sheet->getDelegate();
+                $fixedCount = count($this->fixedHeaders);
+                $dynamicCount = count($this->dynamicColumns);
+                $totalColumns = $fixedCount + $dynamicCount;
+
+                if ($totalColumns === 0) {
+                    return;
+                }
+
+                // Fijos: merge vertical fila 1 y 2.
+                for ($i = 1; $i <= $fixedCount; $i++) {
+                    $col = Coordinate::stringFromColumnIndex($i);
+                    $sheet->mergeCells("{$col}1:{$col}2");
+                }
+
+                // Dinámicos: merge horizontal por apartado en fila 1.
+                if ($dynamicCount > 0) {
+                    $startIndex = $fixedCount + 1;
+
+                    while ($startIndex <= $totalColumns) {
+                        $offset = $startIndex - ($fixedCount + 1);
+                        $apartado = $this->dynamicColumns[$offset]['apartado'] ?? '';
+
+                        $endIndex = $startIndex;
+                        while ($endIndex < $totalColumns) {
+                            $nextOffset = ($endIndex + 1) - ($fixedCount + 1);
+                            $nextApartado = $this->dynamicColumns[$nextOffset]['apartado'] ?? null;
+                            if ($nextApartado !== $apartado) {
+                                break;
+                            }
+                            $endIndex++;
+                        }
+
+                        $startCol = Coordinate::stringFromColumnIndex($startIndex);
+                        $endCol = Coordinate::stringFromColumnIndex($endIndex);
+                        $sheet->mergeCells("{$startCol}1:{$endCol}1");
+
+                        $startIndex = $endIndex + 1;
+                    }
+                }
+
+                $lastCol = Coordinate::stringFromColumnIndex($totalColumns);
+                $headerRange = "A1:{$lastCol}2";
+
+                $sheet->getStyle($headerRange)->applyFromArray([
+                    'font' => [
+                        'bold' => false,
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => Border::BORDER_THIN,
+                        ],
+                    ],
+                ]);
+
+                // Bordes para datos también.
+                $highestRow = $sheet->getHighestRow();
+                if ($highestRow >= 3) {
+                    $sheet->getStyle("A3:{$lastCol}{$highestRow}")->applyFromArray([
+                        'alignment' => [
+                            'horizontal' => Alignment::HORIZONTAL_CENTER,
+                            'vertical' => Alignment::VERTICAL_CENTER,
+                            'wrapText' => true,
+                        ],
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => Border::BORDER_THIN,
+                            ],
+                        ],
+                    ]);
+                }
+
+                $sheet->getRowDimension(1)->setRowHeight(28);
+                $sheet->getRowDimension(2)->setRowHeight(64);
+            },
+        ];
+    }
+
+    protected function prepareHeaders(): void
+    {
+        if ($this->headersPrepared) {
+            return;
+        }
+
+        $files = glob(storage_path("app/{$this->tmpPath}/*.jsonl"));
+        sort($files);
+
+        $dynamicMap = [];
+
+        foreach ($files as $file) {
+            $handle = fopen($file, 'r');
+
+            while (($line = fgets($handle)) !== false) {
+                $decoded = json_decode(trim($line), true);
+                if (!$decoded) {
+                    continue;
+                }
+
+                foreach (($decoded['biologicos'] ?? []) as $bio) {
+                    $apartado = (string) ($bio['apartado'] ?? '');
+
+                    foreach (($bio['grupos'] ?? []) as $grupo) {
+                        foreach (($grupo['variables'] ?? []) as $variable) {
+                            $variableLabel = (string) ($variable['variable'] ?? '');
+                            $key = $this->makeDynamicKey($apartado, $variableLabel);
+
+                            if (!isset($dynamicMap[$key])) {
+                                $dynamicMap[$key] = [
+                                    'key' => $key,
+                                    'apartado' => $apartado,
+                                    'variable' => $variableLabel,
+                                ];
+                            }
+                        }
                     }
                 }
             }
+
+            fclose($handle);
         }
 
-        fclose($handle);
+        $this->dynamicColumns = array_values($dynamicMap);
+        $this->headersPrepared = true;
     }
 
-    $dynamicHeaders = array_values($dynamicHeaders);
+    /**
+     * @return array<int,string>
+     */
+    protected function buildTopHeaderRow(): array
+    {
+        $row = $this->fixedHeaders;
 
-    /*
-    |--------------------------------------------------------------------------
-    | 2️⃣ Yield encabezados
-    |--------------------------------------------------------------------------
-    */
-
-    yield array_merge(
-        [
-            'CLUES',
-            'Unidad',
-            'Entidad',
-            'Jurisdicción',
-            'Municipio',
-            'Institución',
-        ],
-        $dynamicHeaders
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | 3️⃣ Segunda pasada: stream real
-    |--------------------------------------------------------------------------
-    */
-
-    foreach ($files as $file) {
-
-        $handle = fopen($file, 'r');
-
-        while (($line = fgets($handle)) !== false) {
-
-            $decoded = json_decode(trim($line), true);
-            if (!$decoded) continue;
-
-            $row = [
-                $decoded['clues'] ?? '',
-                $decoded['unidad']['nombre'] ?? '',
-                $decoded['unidad']['entidad'] ?? '',
-                $decoded['unidad']['jurisdiccion'] ?? '',
-                $decoded['unidad']['municipio'] ?? '',
-                $decoded['unidad']['institucion'] ?? '',
-            ];
-
-            $dynamicValues = array_fill_keys($dynamicHeaders, 0);
-
-            foreach ($decoded['biologicos'] as $bio) {
-                foreach ($bio['grupos'] as $grupo) {
-                    foreach ($grupo['variables'] as $variable) {
-
-                        $key = $bio['apartado']
-                            . ' | '
-                            . $variable['variable'];
-
-                        $dynamicValues[$key] = ($dynamicValues[$key] ?? 0) + ($variable['total'] ?? 0);
-                    }
-                }
+        $lastApartado = null;
+        foreach ($this->dynamicColumns as $col) {
+            if ($col['apartado'] !== $lastApartado) {
+                $row[] = $col['apartado'];
+                $lastApartado = $col['apartado'];
+                continue;
             }
-
-            yield array_merge($row, array_values($dynamicValues));
+            $row[] = '';
         }
 
-        fclose($handle);
+        return $row;
     }
-}
+
+    /**
+     * @return array<int,string>
+     */
+    protected function buildVariableHeaderRow(): array
+    {
+        $row = array_fill(0, count($this->fixedHeaders), '');
+
+        foreach ($this->dynamicColumns as $col) {
+            $row[] = $col['variable'];
+        }
+
+        return $row;
+    }
+
+    protected function makeDynamicKey(string $apartado, string $variable): string
+    {
+        return $apartado . ' | ' . $variable;
+    }
 }
