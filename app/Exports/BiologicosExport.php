@@ -9,6 +9,7 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class BiologicosExport implements FromGenerator, WithEvents
 {
@@ -162,6 +163,39 @@ class BiologicosExport implements FromGenerator, WithEvents
                     ],
                 ]);
 
+                // Colores encabezado base A-F
+                $sheet->getStyle('A1:F2')->applyFromArray([
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['argb' => 'FF902449'],
+                    ],
+                    'font' => [
+                        'color' => ['argb' => 'FFFFFFFF'],
+                    ],
+                ]);
+
+                // Paleta contrastada (incluye 1 color extra: #f4b183)
+                $palette = [
+                    'FF0066CC',
+                    'FFFFD965',
+                    'FFFF6600',
+                    'FF00CCFF',
+                    'FF548135',
+                    'FFFF99CC',
+                    'FF6699FF',
+                    'FFFF9900',
+                    'FFA8D08D',
+                    'FF9933FF',
+                    'FFFFCC99',
+                    'FF00B0F0',
+                    'FFFFC000',
+                    'FFD4C19C',
+                    'FFF4B183',
+                ];
+
+                $apartadoColorMap = [];
+                $nextColorIdx = 0;
+
                 // Bordes para datos también.
                 $highestRow = $sheet->getHighestRow();
                 if ($highestRow >= 3) {
@@ -177,6 +211,61 @@ class BiologicosExport implements FromGenerator, WithEvents
                             ],
                         ],
                     ]);
+                }
+
+                // Colores por apartado (mismo color para fila 1 y 2),
+                // excepto columnas "TOTAL ... MIGRANTES" que van en gris.
+                if ($dynamicCount > 0) {
+                    $startIndex = $fixedCount + 1;
+
+                    while ($startIndex <= $totalColumns) {
+                        $offset = $startIndex - ($fixedCount + 1);
+                        $apartado = $this->dynamicColumns[$offset]['apartado'] ?? '';
+                        $variable = $this->dynamicColumns[$offset]['variable'] ?? '';
+                        $isMigrante = $this->isMigranteVariable($variable);
+
+                        $endIndex = $startIndex;
+
+                        if (!$isMigrante) {
+                            while ($endIndex < $totalColumns) {
+                                $nextOffset = ($endIndex + 1) - ($fixedCount + 1);
+                                $nextApartado = $this->dynamicColumns[$nextOffset]['apartado'] ?? null;
+                                $nextVariable = $this->dynamicColumns[$nextOffset]['variable'] ?? '';
+                                $nextIsMigrante = $this->isMigranteVariable($nextVariable);
+
+                                if ($nextApartado !== $apartado || $nextIsMigrante) {
+                                    break;
+                                }
+
+                                $endIndex++;
+                            }
+                        }
+
+                        $startCol = Coordinate::stringFromColumnIndex($startIndex);
+                        $endCol = Coordinate::stringFromColumnIndex($endIndex);
+
+                        if ($isMigrante) {
+                            $fillColor = 'FFECECEC';
+                        } else {
+                            if (!isset($apartadoColorMap[$apartado])) {
+                                $apartadoColorMap[$apartado] = $palette[$nextColorIdx % count($palette)];
+                                $nextColorIdx++;
+                            }
+                            $fillColor = $apartadoColorMap[$apartado];
+                        }
+
+                        $sheet->getStyle("{$startCol}1:{$endCol}2")->applyFromArray([
+                            'fill' => [
+                                'fillType' => Fill::FILL_SOLID,
+                                'startColor' => ['argb' => $fillColor],
+                            ],
+                            'font' => [
+                                'color' => ['argb' => 'FF000000'],
+                            ],
+                        ]);
+
+                        $startIndex = $endIndex + 1;
+                    }
                 }
 
                 $sheet->getRowDimension(1)->setRowHeight(28);
@@ -286,5 +375,11 @@ class BiologicosExport implements FromGenerator, WithEvents
     protected function makeDynamicKey(string $apartado, string $variable): string
     {
         return $apartado . ' | ' . $variable;
+    }
+
+    protected function isMigranteVariable(string $variable): bool
+    {
+        $v = mb_strtoupper($variable);
+        return str_contains($v, 'MIGRANTE');
     }
 }
