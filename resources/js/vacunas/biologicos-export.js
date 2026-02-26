@@ -1,16 +1,17 @@
+import * as Bootstrap from "bootstrap";
+
 let currentInterval = null;
 let currentDisplayedProgress = 0;
 let progressAnimationFrame = null;
+let exportProgressModalInstance = null;
 
-console.log("Biologicos Export cargado correctamente 🚀");
+console.log("Biologicos Export cargado correctamente");
 
 document.addEventListener("DOMContentLoaded", () => {
-
     const btnExport = document.getElementById("btnExportarExcel");
     if (!btnExport) return;
 
     btnExport.addEventListener("click", async () => {
-
         const catalogo = document.getElementById("catalogoInput")?.value?.trim() ?? "";
         const cubo = document.getElementById("cuboInput")?.value?.trim() ?? "";
         const clues = window.getSelectedClues?.() ?? [];
@@ -21,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         btnExport.disabled = true;
-
+        showExportProgressModal();
         resetProgressBar();
 
         try {
@@ -29,7 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
+                    Accept: "application/json",
                 },
                 body: JSON.stringify({ catalogo, cubo, clues }),
             });
@@ -37,32 +38,23 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await res.json();
 
             if (!res.ok || !data.ok) {
+                hideExportProgressModal();
                 alert("Error creando export");
                 btnExport.disabled = false;
                 return;
             }
 
             startPolling(data.export.id, btnExport);
-
         } catch (e) {
             console.error(e);
+            hideExportProgressModal();
             alert("Error inesperado.");
             btnExport.disabled = false;
         }
     });
-
 });
 
-
-
-/*
-|--------------------------------------------------------------------------
-| Reset Progress Bar
-|--------------------------------------------------------------------------
-*/
-
 function resetProgressBar() {
-
     const container = document.getElementById("exportProgressContainer");
     const bar = document.getElementById("exportProgressBar");
     const percent = document.getElementById("exportProgressPercent");
@@ -81,84 +73,69 @@ function resetProgressBar() {
     bar.style.width = "0%";
     percent.textContent = "0%";
     bar.setAttribute("aria-valuenow", "0");
-
-    // color inicial rojo institucional
     bar.style.backgroundColor = "#A02142";
     bar.classList.add("progress-bar-striped", "progress-bar-animated");
-
-    // ocultar botón descarga
     downloadBtn?.classList.add("d-none");
 }
 
-
-
-/*
-|--------------------------------------------------------------------------
-| Polling
-|--------------------------------------------------------------------------
-*/
-
 function startPolling(exportId, button) {
-
     if (currentInterval) {
         clearInterval(currentInterval);
     }
 
     currentInterval = setInterval(async () => {
+        try {
+            const res = await fetch(`/api/vacunas/exports/${exportId}`);
+            const data = await res.json();
 
-        const res = await fetch(`/api/vacunas/exports/${exportId}`);
-        const data = await res.json();
-
-        if (!res.ok || !data.ok) {
-            clearInterval(currentInterval);
-            currentInterval = null;
-            button.disabled = false;
-            alert("Error consultando progreso");
-            return;
-        }
-
-        const exportData = data.export;
-        console.log("Progreso recibido:", exportData.progress);
-
-        updateProgressBar(Number.parseInt(exportData.progress, 10));
-
-        if (exportData.status === "completed") {
-            clearInterval(currentInterval);
-            currentInterval = null;
-            updateProgressBar(100);
-            setTimeout(() => {
+            if (!res.ok || !data.ok) {
+                clearInterval(currentInterval);
+                currentInterval = null;
+                hideExportProgressModal();
                 button.disabled = false;
-                showDownloadButton(exportId);
-            }, 400);
-        }
+                alert("Error consultando progreso");
+                return;
+            }
 
-        if (exportData.status === "failed") {
+            const exportData = data.export;
+            updateProgressBar(Number.parseInt(exportData.progress, 10));
+
+            if (exportData.status === "completed") {
+                clearInterval(currentInterval);
+                currentInterval = null;
+                updateProgressBar(100);
+
+                setTimeout(() => {
+                    hideExportProgressModal();
+                    button.disabled = false;
+                    showDownloadButton(exportId);
+                }, 450);
+            }
+
+            if (exportData.status === "failed") {
+                clearInterval(currentInterval);
+                currentInterval = null;
+                hideExportProgressModal();
+                button.disabled = false;
+                alert("La exportacion fallo.");
+            }
+        } catch (e) {
+            console.error(e);
             clearInterval(currentInterval);
             currentInterval = null;
+            hideExportProgressModal();
             button.disabled = false;
-            alert("La exportación falló.");
+            alert("Error de red consultando progreso.");
         }
-
     }, 2000);
 }
 
-
-
-/*
-|--------------------------------------------------------------------------
-| Update Progress Bar
-|--------------------------------------------------------------------------
-*/
 function updateProgressBar(progress) {
-
     const bar = document.getElementById("exportProgressBar");
     const percent = document.getElementById("exportProgressPercent");
 
     if (!bar || !percent) return;
-
-    if (!Number.isFinite(progress)) {
-        return;
-    }
+    if (!Number.isFinite(progress)) return;
 
     const targetProgress = Math.max(0, Math.min(100, progress));
     const startProgress = currentDisplayedProgress;
@@ -180,8 +157,6 @@ function updateProgressBar(progress) {
     const step = (now) => {
         const elapsed = now - startedAt;
         const t = Math.min(1, elapsed / duration);
-
-        // Ease-out para sensación fluida al aproximarse al objetivo.
         const eased = 1 - Math.pow(1 - t, 3);
         const interpolated = startProgress + delta * eased;
 
@@ -207,33 +182,40 @@ function renderProgressState(progress, bar, percent) {
     bar.setAttribute("aria-valuenow", String(rounded));
 
     if (progress <= 33) {
-        bar.style.backgroundColor = "#A02142"; // rojo
-    }
-    else if (progress < 100) {
-        bar.style.backgroundColor = "#BC955B"; // dorado
-    }
-    else {
-        bar.style.backgroundColor = "#235C4F"; // verde
+        bar.style.backgroundColor = "#A02142";
+    } else if (progress < 100) {
+        bar.style.backgroundColor = "#BC955B";
+    } else {
+        bar.style.backgroundColor = "#235C4F";
         bar.classList.remove("progress-bar-animated");
     }
 }
 
-
-
-/*
-|--------------------------------------------------------------------------
-| Show Download Button
-|--------------------------------------------------------------------------
-*/
-
 function showDownloadButton(exportId) {
-
     const downloadBtn = document.getElementById("btnDownloadExcel");
     if (!downloadBtn) return;
 
     downloadBtn.classList.remove("d-none");
-
     downloadBtn.onclick = () => {
         window.location.href = `/api/vacunas/exports/${exportId}/download`;
     };
+}
+
+function showExportProgressModal() {
+    const modalEl = document.getElementById("exportProgressModal");
+    if (!modalEl) return;
+
+    exportProgressModalInstance = Bootstrap.Modal.getOrCreateInstance(modalEl, {
+        backdrop: "static",
+        keyboard: false,
+    });
+    exportProgressModalInstance.show();
+}
+
+function hideExportProgressModal() {
+    const modalEl = document.getElementById("exportProgressModal");
+    if (!modalEl) return;
+
+    const modal = exportProgressModalInstance ?? Bootstrap.Modal.getInstance(modalEl);
+    modal?.hide();
 }

@@ -9,7 +9,7 @@
         <div class="card">
             <div class="card-body">
 
-                {{-- Inputs mínimos para prueba --}}
+                {{-- Inputs minimos para prueba --}}
                 <div class="row g-2">
 
                     <div class="col-md-6">
@@ -72,7 +72,6 @@
                 </button>
 
             </div>
-            <x-progress-bar />
 
             <div id="previewContainer" class="table-responsive mt-3">
                 <table class="table table-bordered table-striped" id="tablaResultados">
@@ -86,14 +85,29 @@
 
         </div>
     </div>
-    <x-modal-aviso id="confirmPrefijoModal" modaltype="warning" textTitle="Confirmar selección masiva"
-        accionBtnTxt="Sí, agregar" accionBtnClass="btn-primary" closeDataModalTxt="Cancelar"
+
+    <x-modal-aviso id="confirmPrefijoModal" modaltype="warning" textTitle="Confirmar seleccion masiva"
+        accionBtnTxt="Si, agregar" accionBtnClass="btn-primary" closeDataModalTxt="Cancelar"
         closeDataModalClass="btn-secondary" :showOk="true" :showCerrar="true">
         <div id="confirmPrefijoBody">
-            <!-- aquí inyectamos el mensaje desde JS -->
+            <!-- aqui inyectamos el mensaje desde JS -->
         </div>
     </x-modal-aviso>
 
-
-    {{-- <x-precarga></x-precarga> --}}
+    @push('modals')
+        <div class="modal fade" id="exportProgressModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+            aria-labelledby="exportProgressModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="exportProgressModalLabel">Generando Excel</h5>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-2">Tu archivo se esta preparando. Espera un momento...</p>
+                        <x-progress-bar />
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endpush
 </x-app-layout>
