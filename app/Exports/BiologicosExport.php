@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use Generator;
 use Maatwebsite\Excel\Concerns\FromGenerator;
+use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -11,7 +12,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class BiologicosExport implements FromGenerator, WithEvents
+class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullComparison
 {
     protected string $tmpPath;
 
@@ -80,7 +81,8 @@ class BiologicosExport implements FromGenerator, WithEvents
                         foreach (($grupo['variables'] ?? []) as $variable) {
                             $variableLabel = (string) ($variable['variable'] ?? '');
                             $key = $this->makeDynamicKey($apartado, $variableLabel);
-                            $dynamicValues[$key] = ($dynamicValues[$key] ?? 0) + (int) ($variable['total'] ?? 0);
+                            $dynamicValues[$key] = ($dynamicValues[$key] ?? 0)
+                                + $this->normalizeTotal($variable['total'] ?? 0);
                         }
                     }
                 }
@@ -269,7 +271,7 @@ class BiologicosExport implements FromGenerator, WithEvents
                 }
 
                 $sheet->getRowDimension(1)->setRowHeight(28);
-                $sheet->getRowDimension(2)->setRowHeight(64);
+                $sheet->getRowDimension(2)->setRowHeight(160);
 
                 // Ancho fijo para columnas base (A con ancho especial).
                 $sheet->getColumnDimension('A')->setWidth(17);
@@ -375,6 +377,19 @@ class BiologicosExport implements FromGenerator, WithEvents
     protected function makeDynamicKey(string $apartado, string $variable): string
     {
         return $apartado . ' | ' . $variable;
+    }
+
+    protected function normalizeTotal(mixed $value): int
+    {
+        if ($value === null || $value === '') {
+            return 0;
+        }
+
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+
+        return 0;
     }
 
     protected function isMigranteVariable(string $variable): bool
