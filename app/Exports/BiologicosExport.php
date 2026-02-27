@@ -223,7 +223,10 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                 $headerRange = "A1:{$lastCol}3";
 
                 $sheet->getStyle($headerRange)->applyFromArray([
-                    'font' => ['bold' => false],
+                    'font' => [
+                        'bold' => false,
+                        'size' => 11,
+                    ],
                     'alignment' => [
                         'horizontal' => Alignment::HORIZONTAL_CENTER,
                         'vertical' => Alignment::VERTICAL_CENTER,
@@ -368,10 +371,109 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                     }
                 }
 
+                // Tipografia solicitada:
+                // A-F: 13 bold
+                $sheet->getStyle('A1:F3')->applyFromArray([
+                    'font' => [
+                        'size' => 13,
+                        'bold' => true,
+                    ],
+                ]);
+
+                if ($dynamicCount > 0) {
+                    $dynStartCol = Coordinate::stringFromColumnIndex($fixedCount + 1);
+
+                    // Apartados (fila 1): 13 bold
+                    $sheet->getStyle("{$dynStartCol}1:{$lastCol}1")->applyFromArray([
+                        'font' => [
+                            'size' => 13,
+                            'bold' => true,
+                        ],
+                    ]);
+
+                    // Variables/subniveles (filas 2 y 3): 11 normal
+                    $sheet->getStyle("{$dynStartCol}2:{$lastCol}3")->applyFromArray([
+                        'font' => [
+                            'size' => 11,
+                            'bold' => false,
+                        ],
+                    ]);
+
+                    // POBLACION ... : 11 bold
+                    for ($i = 0; $i < $dynamicCount; $i++) {
+                        $apartado = $this->dynamicColumns[$i]['apartado'];
+                        $variable = $this->dynamicColumns[$i]['variable'];
+                        if (!$this->isPopulationHeader($apartado, $variable)) {
+                            continue;
+                        }
+
+                        $absoluteIndex = $fixedCount + 1 + $i;
+                        $col = Coordinate::stringFromColumnIndex($absoluteIndex);
+                        $sheet->getStyle("{$col}1:{$col}3")->applyFromArray([
+                            'font' => [
+                                'size' => 11,
+                                'bold' => true,
+                            ],
+                        ]);
+                    }
+
+                    // COBERTURA PVU (fila 1): 13 bold
+                    if (!empty($coverageIndexes)) {
+                        $covStartCol = Coordinate::stringFromColumnIndex($coverageIndexes[0]);
+                        $covEndCol = Coordinate::stringFromColumnIndex($coverageIndexes[count($coverageIndexes) - 1]);
+                        $sheet->getStyle("{$covStartCol}1:{$covEndCol}1")->applyFromArray([
+                            'font' => [
+                                'size' => 13,
+                                'bold' => true,
+                            ],
+                        ]);
+                    }
+
+                    // ESQUEMAS ... (fila 2): 11 bold
+                    if (count($coverageIndexes) >= 11) {
+                        $g1Start = Coordinate::stringFromColumnIndex($coverageIndexes[0]);
+                        $g1End = Coordinate::stringFromColumnIndex($coverageIndexes[4]);
+                        $g2Start = Coordinate::stringFromColumnIndex($coverageIndexes[5]);
+                        $g2End = Coordinate::stringFromColumnIndex($coverageIndexes[8]);
+
+                        $sheet->getStyle("{$g1Start}2:{$g1End}2")->applyFromArray([
+                            'font' => [
+                                'size' => 11,
+                                'bold' => true,
+                            ],
+                        ]);
+                        $sheet->getStyle("{$g2Start}2:{$g2End}2")->applyFromArray([
+                            'font' => [
+                                'size' => 11,
+                                'bold' => true,
+                            ],
+                        ]);
+
+                        // % ESQUEMA COMPLETO ... (columnas 10 y 11 de cobertura): 11 bold
+                        $c10 = Coordinate::stringFromColumnIndex($coverageIndexes[9]);
+                        $c11 = Coordinate::stringFromColumnIndex($coverageIndexes[10]);
+                        $sheet->getStyle("{$c10}2:{$c10}3")->applyFromArray([
+                            'font' => [
+                                'size' => 11,
+                                'bold' => true,
+                            ],
+                        ]);
+                        $sheet->getStyle("{$c11}2:{$c11}3")->applyFromArray([
+                            'font' => [
+                                'size' => 11,
+                                'bold' => true,
+                            ],
+                        ]);
+                    }
+                }
+
                 // Datos desde fila 4.
                 $highestRow = $sheet->getHighestRow();
                 if ($highestRow >= 4) {
                     $sheet->getStyle("A4:{$lastCol}{$highestRow}")->applyFromArray([
+                        'font' => [
+                            'size' => 11,
+                        ],
                         'alignment' => [
                             'horizontal' => Alignment::HORIZONTAL_CENTER,
                             'vertical' => Alignment::VERTICAL_CENTER,
