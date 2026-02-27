@@ -297,6 +297,77 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                     }
                 }
 
+                // Colores específicos solicitados para COBERTURA PVU.
+                $coverageIndexes = $this->getCoverageColumnIndexes($fixedCount);
+                if (!empty($coverageIndexes)) {
+                    $covStartCol = Coordinate::stringFromColumnIndex($coverageIndexes[0]);
+                    $covEndCol = Coordinate::stringFromColumnIndex($coverageIndexes[count($coverageIndexes) - 1]);
+
+                    // Fila 1: COBERTURA PVU
+                    $sheet->getStyle("{$covStartCol}1:{$covEndCol}1")->applyFromArray([
+                        'fill' => [
+                            'fillType' => Fill::FILL_SOLID,
+                            'startColor' => ['argb' => 'FFFEF2CB'],
+                        ],
+                    ]);
+
+                    // Fila 2: subgrupos.
+                    if (count($coverageIndexes) >= 11) {
+                        $g1Start = Coordinate::stringFromColumnIndex($coverageIndexes[0]);
+                        $g1End = Coordinate::stringFromColumnIndex($coverageIndexes[4]);
+                        $g2Start = Coordinate::stringFromColumnIndex($coverageIndexes[5]);
+                        $g2End = Coordinate::stringFromColumnIndex($coverageIndexes[8]);
+
+                        $sheet->getStyle("{$g1Start}2:{$g1End}2")->applyFromArray([
+                            'fill' => [
+                                'fillType' => Fill::FILL_SOLID,
+                                'startColor' => ['argb' => 'FFFFC000'],
+                            ],
+                        ]);
+
+                        $sheet->getStyle("{$g2Start}2:{$g2End}2")->applyFromArray([
+                            'fill' => [
+                                'fillType' => Fill::FILL_SOLID,
+                                'startColor' => ['argb' => 'FF70AD47'],
+                            ],
+                        ]);
+                    }
+
+                    // Fila 3: variables de COBERTURA PVU.
+                    foreach ($this->dynamicColumns as $i => $colData) {
+                        if ($colData['apartado'] !== 'COBERTURA PVU') {
+                            continue;
+                        }
+
+                        $absoluteIndex = $fixedCount + 1 + $i;
+                        $col = Coordinate::stringFromColumnIndex($absoluteIndex);
+                        $varColor = $this->getCoverageVariableColor($colData['variable']);
+                        if ($varColor === null) {
+                            continue;
+                        }
+
+                        $sheet->getStyle("{$col}3:{$col}3")->applyFromArray([
+                            'fill' => [
+                                'fillType' => Fill::FILL_SOLID,
+                                'startColor' => ['argb' => $varColor],
+                            ],
+                        ]);
+
+                        // Para columnas que están en merge 2:3 (DPT/SRP2a), colorear todo el merge.
+                        if (
+                            $this->normalizeText($colData['variable']) === '% ESQUEMA COMPLETO DE DPT EN 4 ANOS'
+                            || $this->normalizeText($colData['variable']) === '% ESQUEMA COMPLETO DE SRP 2A EN 6 ANOS'
+                        ) {
+                            $sheet->getStyle("{$col}2:{$col}3")->applyFromArray([
+                                'fill' => [
+                                    'fillType' => Fill::FILL_SOLID,
+                                    'startColor' => ['argb' => $varColor],
+                                ],
+                            ]);
+                        }
+                    }
+                }
+
                 // Datos desde fila 4.
                 $highestRow = $sheet->getHighestRow();
                 if ($highestRow >= 4) {
@@ -550,6 +621,25 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
     {
         $v = mb_strtoupper($variable);
         return str_contains($v, 'MIGRANTE');
+    }
+
+    protected function getCoverageVariableColor(string $variable): ?string
+    {
+        return match ($this->normalizeText($variable)) {
+            '% BCG' => 'FF0066CC',
+            '% HEPATITIS B (<1 ANO)' => 'FFFFD965',
+            // No se especificó en la lista; se usa un tono cercano del diseño.
+            '% HEXAVALENTE (<1 ANO)' => 'FF6699FF',
+            '% ROTAVIRUS RV1' => 'FFFFC000',
+            '% NEUMOCOCICA CONJUGADA (<1 ANO)' => 'FF548135',
+            '% HEXAVALENTE (1 ANO)' => 'FFD4C19C',
+            '% NEUMOCOCICA CONJUGADA (1 ANO)' => 'FF548135',
+            '% SRP 1RA' => 'FF6699FF',
+            '% SRP 2DA' => 'FF6699FF',
+            '% ESQUEMA COMPLETO DE DPT EN 4 ANOS' => 'FF00CCFF',
+            '% ESQUEMA COMPLETO DE SRP 2A EN 6 ANOS' => 'FF6699FF',
+            default => null,
+        };
     }
 
     protected function normalizeText(string $value): string
