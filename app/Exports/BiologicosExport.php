@@ -472,7 +472,7 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                 if ($highestRow >= 4) {
                     $sheet->getStyle("A4:{$lastCol}{$highestRow}")->applyFromArray([
                         'font' => [
-                            'size' => 11,
+                            'size' => 10,
                         ],
                         'alignment' => [
                             'horizontal' => Alignment::HORIZONTAL_CENTER,
