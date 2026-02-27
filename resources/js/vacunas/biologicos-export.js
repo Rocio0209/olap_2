@@ -247,7 +247,8 @@ async function cancelCurrentExport(exportButton, cancelButton) {
         return;
     }
 
-    if (!confirm("¿Deseas cancelar la exportacion actual?")) {
+    const confirmed = await confirmCancelExportWithModal();
+    if (!confirmed) {
         return;
     }
 
@@ -281,4 +282,54 @@ async function cancelCurrentExport(exportButton, cancelButton) {
     } finally {
         cancelButton.disabled = false;
     }
+}
+
+function confirmCancelExportWithModal() {
+    return new Promise((resolve) => {
+        const modalEl = document.getElementById("cancelExportModal");
+        const bodyEl = document.getElementById("cancelExportBody");
+        const titleEl = document.getElementById("avisoTitlecancelExportModal");
+        const okBtn = document.getElementById("avisoActionBtncancelExportModal");
+
+        if (!modalEl || !okBtn) {
+            resolve(window.confirm("¿Deseas cancelar la exportacion actual?"));
+            return;
+        }
+
+        if (bodyEl) {
+            bodyEl.textContent = "¿Deseas cancelar la exportacion actual?";
+        }
+        if (titleEl) {
+            titleEl.textContent = "Cancelar exportacion";
+        }
+
+        const modal = Bootstrap.Modal.getOrCreateInstance(modalEl);
+        let decided = false;
+
+        // Forzar apilamiento por encima del modal de progreso.
+        modalEl.style.zIndex = "2000";
+        modalEl.addEventListener("shown.bs.modal", () => {
+            const backdrops = document.querySelectorAll(".modal-backdrop");
+            const lastBackdrop = backdrops[backdrops.length - 1];
+            if (lastBackdrop) {
+                lastBackdrop.style.zIndex = "1995";
+            }
+        }, { once: true });
+
+        okBtn.onclick = () => {
+            decided = true;
+            modal.hide();
+            resolve(true);
+        };
+
+        const onHidden = () => {
+            modalEl.removeEventListener("hidden.bs.modal", onHidden);
+            if (!decided) {
+                resolve(false);
+            }
+        };
+
+        modalEl.addEventListener("hidden.bs.modal", onHidden);
+        modal.show();
+    });
 }

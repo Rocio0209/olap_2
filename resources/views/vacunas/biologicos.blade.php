@@ -96,6 +96,14 @@
         </div>
     </x-modal-aviso>
 
+    <x-modal-aviso id="cancelExportModal" modaltype="warning" textTitle="Cancelar exportacion"
+        accionBtnTxt="Si, cancelar" accionBtnClass="btn-danger" closeDataModalTxt="Continuar"
+        closeDataModalClass="btn-secondary" :showOk="true" :showCerrar="true">
+        <div id="cancelExportBody">
+            ¿Deseas cancelar la exportacion actual?
+        </div>
+    </x-modal-aviso>
+
     @push('modals')
         <div class="modal fade" id="exportProgressModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
             aria-labelledby="exportProgressModalLabel" aria-hidden="true">

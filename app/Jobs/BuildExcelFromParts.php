@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\ExportCancelledException;
 use App\Models\Export;
 use App\Exports\BiologicosExport;
 use Illuminate\Bus\Queueable;
@@ -10,8 +11,10 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Bus\Batchable;
+use Illuminate\Queue\Middleware\SkipIfBatchCancelled;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
+use Throwable;
 
 class BuildExcelFromParts implements ShouldQueue
 {
@@ -22,6 +25,11 @@ class BuildExcelFromParts implements ShouldQueue
     public function __construct(int $exportId)
     {
         $this->exportId = $exportId;
+    }
+
+    public function middleware(): array
+    {
+        return [new SkipIfBatchCancelled];
     }
 
     public function handle(): void
@@ -54,12 +62,24 @@ class BuildExcelFromParts implements ShouldQueue
 
         $finalPath = "exports/final/biologicos_{$this->exportId}.xlsx";
 
-        Excel::store(
-            new BiologicosExport($tmpPath), // 🔥 ahora recibe ruta, no array
-            $finalPath,
-            'local'
-        );
+        try {
+            Excel::store(
+                new BiologicosExport($tmpPath, $this->exportId),
+                $finalPath,
+                'local'
+            );
+        } catch (ExportCancelledException $e) {
+            $this->markAsCancelled($export, $tmpPath, $finalPath);
+            return;
+        }
         if ($this->batch()?->cancelled()) {
+            $this->markAsCancelled($export, $tmpPath, $finalPath);
+            return;
+        }
+
+        $export->refresh();
+        if ($export->status === 'cancelled') {
+            $this->markAsCancelled($export, $tmpPath, $finalPath);
             return;
         }
 
@@ -86,11 +106,38 @@ class BuildExcelFromParts implements ShouldQueue
         }
     }
 
-    public function failed(\Throwable $e): void
+    public function failed(Throwable $e): void
     {
+        if ($e instanceof ExportCancelledException) {
+            return;
+        }
+
+        $export = Export::find($this->exportId);
+        if ($export && $export->status === 'cancelled') {
+            return;
+        }
+
         Export::where('id', $this->exportId)->update([
             'status' => 'failed',
             'error'  => $e->getMessage(),
+        ]);
+    }
+
+    protected function markAsCancelled(Export $export, string $tmpPath, string $finalPath): void
+    {
+        if (Storage::disk('local')->exists($finalPath)) {
+            Storage::disk('local')->delete($finalPath);
+        }
+
+        if (Storage::disk('local')->exists($tmpPath)) {
+            Storage::disk('local')->deleteDirectory($tmpPath);
+        }
+
+        $export->update([
+            'status' => 'cancelled',
+            'progress' => 0,
+            'error' => null,
+            'final_path' => null,
         ]);
     }
 }

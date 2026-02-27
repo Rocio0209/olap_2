@@ -10,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Bus\Batchable;
+use Illuminate\Queue\Middleware\SkipIfBatchCancelled;
 use Illuminate\Support\Facades\Storage;
 
 class FetchTransformChunk implements ShouldQueue
@@ -25,6 +26,11 @@ class FetchTransformChunk implements ShouldQueue
         $this->exportId = $exportId;
         $this->chunk    = $chunk;
         $this->index    = $index;
+    }
+
+    public function middleware(): array
+    {
+        return [new SkipIfBatchCancelled];
     }
 
     public function handle(VacunasApiService $apiService): void
@@ -48,6 +54,11 @@ class FetchTransformChunk implements ShouldQueue
 
         $data = $apiService->biologicos($params);
         if ($this->batch()?->cancelled()) {
+            return;
+        }
+
+        $export->refresh();
+        if ($export->status === 'cancelled') {
             return;
         }
 

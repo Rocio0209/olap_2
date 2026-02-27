@@ -2,6 +2,8 @@
 
 namespace App\Exports;
 
+use App\Exceptions\ExportCancelledException;
+use App\Models\Export;
 use Generator;
 use Maatwebsite\Excel\Concerns\FromGenerator;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -16,6 +18,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullComparison
 {
     protected string $tmpPath;
+    protected int $exportId;
+    protected int $cancelCheckCounter = 0;
 
     /** @var array<int,string> */
     protected array $fixedHeaders = [
@@ -34,13 +38,15 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
 
     protected bool $headersPrepared = false;
 
-    public function __construct(string $tmpPath)
+    public function __construct(string $tmpPath, int $exportId)
     {
         $this->tmpPath = $tmpPath;
+        $this->exportId = $exportId;
     }
 
     public function generator(): Generator
     {
+        $this->ensureNotCancelled(true);
         $this->prepareHeaders();
 
         // Encabezado 3 niveles.
@@ -52,9 +58,11 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
         sort($files);
 
         foreach ($files as $file) {
+            $this->ensureNotCancelled(true);
             $handle = fopen($file, 'r');
 
             while (($line = fgets($handle)) !== false) {
+                $this->ensureNotCancelled();
                 $decoded = json_decode(trim($line), true);
                 if (!$decoded) {
                     continue;
@@ -534,6 +542,7 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
 
     protected function prepareHeaders(): void
     {
+        $this->ensureNotCancelled(true);
         if ($this->headersPrepared) {
             return;
         }
@@ -544,9 +553,11 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
         $dynamicMap = [];
 
         foreach ($files as $file) {
+            $this->ensureNotCancelled(true);
             $handle = fopen($file, 'r');
 
             while (($line = fgets($handle)) !== false) {
+                $this->ensureNotCancelled();
                 $decoded = json_decode(trim($line), true);
                 if (!$decoded) {
                     continue;
@@ -587,6 +598,24 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
 
         $this->dynamicColumns = array_values($dynamicMap);
         $this->headersPrepared = true;
+    }
+
+    protected function ensureNotCancelled(bool $force = false): void
+    {
+        if (!$force) {
+            $this->cancelCheckCounter++;
+            if ($this->cancelCheckCounter % 100 !== 0) {
+                return;
+            }
+        }
+
+        $status = Export::query()
+            ->whereKey($this->exportId)
+            ->value('status');
+
+        if ($status === 'cancelled') {
+            throw new ExportCancelledException('Export cancelled by user.');
+        }
     }
 
     /**

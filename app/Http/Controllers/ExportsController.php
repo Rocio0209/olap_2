@@ -6,7 +6,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Export;
 use Illuminate\Support\Facades\Bus;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Bus\Batch;
 use Throwable;
 use App\Jobs\FetchTransformChunk;
@@ -199,13 +198,9 @@ public function show($id)
             }
         }
 
-        $tmpPath = "exports/tmp/{$export->id}";
-        if (Storage::disk('local')->exists($tmpPath)) {
-            Storage::disk('local')->deleteDirectory($tmpPath);
-        }
-
         $export->update([
             'status' => 'cancelled',
+            'progress' => 0,
             'error' => null,
         ]);
 
