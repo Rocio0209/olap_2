@@ -532,7 +532,7 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
 
     protected function getCoverageGroupLabel(string $variable): string
     {
-        $v = mb_strtoupper($variable);
+        $v = $this->normalizeText($variable);
 
         $firstGroup = [
             '% BCG',
@@ -550,11 +550,11 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
         ];
 
         if (in_array($v, $firstGroup, true)) {
-            return 'ESQUEMAS POR BIOLOGICO PARA MENORES DE 1 ANO';
+            return 'ESQUEMAS POR BIOLOGICO PARA MENORES DE 1 AÑO';
         }
 
         if (in_array($v, $secondGroup, true)) {
-            return 'ESQUEMAS COMPLETOS POR BIOLOGICO EN 1 ANO';
+            return 'ESQUEMAS COMPLETOS POR BIOLOGICO EN 1 AÑO';
         }
 
         return $variable;
@@ -562,7 +562,7 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
 
     protected function getCoverageBottomLabel(string $variable): string
     {
-        $v = mb_strtoupper($variable);
+        $v = $this->normalizeText($variable);
         $standalone = [
             '% ESQUEMA COMPLETO DE DPT EN 4 ANOS',
             '% ESQUEMA COMPLETO DE SRP 2A EN 6 ANOS',
@@ -591,12 +591,14 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
 
     protected function isPopulationHeader(string $apartado, string $variable): bool
     {
-        if ($apartado !== $variable) {
+        $apartadoN = $this->normalizeText($apartado);
+        $variableN = $this->normalizeText($variable);
+
+        if ($apartadoN !== $variableN) {
             return false;
         }
 
-        $normalized = $this->normalizeText($apartado);
-        return str_starts_with($normalized, 'POBLACION');
+        return str_starts_with($apartadoN, 'POBLACION');
     }
 
     protected function makeDynamicKey(string $apartado, string $variable): string
@@ -627,31 +629,53 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
     {
         return match ($this->normalizeText($variable)) {
             '% BCG' => 'FF0066CC',
-            '% HEPATITIS B (<1 AÑO)' => 'FFFFD965',
-            '% HEXAVALENTE (<1 AÑO)' => 'FF6699FF',
+            '% HEPATITIS B (<1 ANO)' => 'FFFFD965',
+            '% HEXAVALENTE (<1 ANO)' => 'FF6699FF',
             '% ROTAVIRUS RV1' => 'FFFFC000',
-            '% NEUMOCOCICA CONJUGADA (<1 AÑO)' => 'FF548135',
-            '% HEXAVALENTE (1 AÑO)' => 'FFD4C19C',
-            '% NEUMOCOCICA CONJUGADA (1 AÑO)' => 'FF548135',
+            '% NEUMOCOCICA CONJUGADA (<1 ANO)' => 'FF548135',
+            '% HEXAVALENTE (1 ANO)' => 'FFD4C19C',
+            '% NEUMOCOCICA CONJUGADA (1 ANO)' => 'FF548135',
             '% SRP 1RA' => 'FF6699FF',
             '% SRP 2DA' => 'FF6699FF',
-            '% ESQUEMA COMPLETO DE DPT EN 4 AÑOS' => 'FF00CCFF',
-            '% ESQUEMA COMPLETO DE SRP 2A EN 6 AÑOS' => 'FF6699FF',
+            '% ESQUEMA COMPLETO DE DPT EN 4 ANOS' => 'FF00CCFF',
+            '% ESQUEMA COMPLETO DE SRP 2A EN 6 ANOS' => 'FF6699FF',
             default => null,
         };
     }
 
     protected function normalizeText(string $value): string
     {
-        $value = mb_strtoupper($value);
-        return strtr($value, [
+        $value = mb_strtoupper(trim($value));
+        $value = strtr($value, [
             'Á' => 'A',
+            'À' => 'A',
+            'Ä' => 'A',
+            'Â' => 'A',
+            'Ã' => 'A',
             'É' => 'E',
+            'È' => 'E',
+            'Ë' => 'E',
+            'Ê' => 'E',
             'Í' => 'I',
+            'Ì' => 'I',
+            'Ï' => 'I',
+            'Î' => 'I',
             'Ó' => 'O',
+            'Ò' => 'O',
+            'Ö' => 'O',
+            'Ô' => 'O',
+            'Õ' => 'O',
             'Ú' => 'U',
+            'Ù' => 'U',
+            'Ü' => 'U',
+            'Û' => 'U',
             'Ñ' => 'N',
         ]);
+
+        // Limpieza extra por si llegan variantes de codificacion rara.
+        $value = str_replace(['Ã‘', 'Ã“', 'Ã', 'Ã‰', 'Ã', 'Ãš'], ['N', 'O', 'A', 'E', 'I', 'U'], $value);
+
+        return $value;
     }
 
     /**
@@ -660,10 +684,10 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
     protected function getAdditionalHeaderDefinitions(): array
     {
         return [
-            ['apartado' => 'POBLACION <1 ANO', 'variable' => 'POBLACIÓN <1 AÑO'],
-            ['apartado' => 'POBLACION 1 ANO', 'variable' => 'POBLACIÓN 1 AÑO'],
-            ['apartado' => 'POBLACION 4 ANO', 'variable' => 'POBLACIÓN 4 AÑO'],
-            ['apartado' => 'POBLACION 6 ANO', 'variable' => 'POBLACIÓN 6 AÑO'],
+            ['apartado' => 'POBLACION <1 AÑO', 'variable' => 'POBLACIÓN <1 AÑO'],
+            ['apartado' => 'POBLACION 1 AÑO', 'variable' => 'POBLACIÓN 1 AÑO'],
+            ['apartado' => 'POBLACION 4 AÑO', 'variable' => 'POBLACIÓN 4 AÑO'],
+            ['apartado' => 'POBLACION 6 AÑO', 'variable' => 'POBLACIÓN 6 AÑO'],
 
             ['apartado' => 'COBERTURA PVU', 'variable' => '% BCG'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% Hepatitis B (<1 AÑO)'],
