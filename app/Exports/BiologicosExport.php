@@ -201,22 +201,22 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
 
                 // Subgrupos de COBERTURA PVU (fila 2).
                 $coverageIndexes = $this->getCoverageColumnIndexes($fixedCount);
-                if (count($coverageIndexes) >= 11) {
-                    // 1-5
+                if (count($coverageIndexes) >= 15) {
+                    // 1-7
                     $c1 = Coordinate::stringFromColumnIndex($coverageIndexes[0]);
-                    $c5 = Coordinate::stringFromColumnIndex($coverageIndexes[4]);
-                    $safeMerge("{$c1}2:{$c5}2");
+                    $c7 = Coordinate::stringFromColumnIndex($coverageIndexes[6]);
+                    $safeMerge("{$c1}2:{$c7}2");
 
-                    // 6-9
-                    $c6 = Coordinate::stringFromColumnIndex($coverageIndexes[5]);
-                    $c9 = Coordinate::stringFromColumnIndex($coverageIndexes[8]);
-                    $safeMerge("{$c6}2:{$c9}2");
+                    // 8-13
+                    $c8 = Coordinate::stringFromColumnIndex($coverageIndexes[7]);
+                    $c13 = Coordinate::stringFromColumnIndex($coverageIndexes[12]);
+                    $safeMerge("{$c8}2:{$c13}2");
 
-                    // 10 y 11 verticales (fila 2-3)
-                    $c10 = Coordinate::stringFromColumnIndex($coverageIndexes[9]);
-                    $c11 = Coordinate::stringFromColumnIndex($coverageIndexes[10]);
-                    $safeMerge("{$c10}2:{$c10}3");
-                    $safeMerge("{$c11}2:{$c11}3");
+                    // 14 y 15 verticales (fila 2-3)
+                    $c14 = Coordinate::stringFromColumnIndex($coverageIndexes[13]);
+                    $c15 = Coordinate::stringFromColumnIndex($coverageIndexes[14]);
+                    $safeMerge("{$c14}2:{$c14}3");
+                    $safeMerge("{$c15}2:{$c15}3");
                 }
 
                 $lastCol = Coordinate::stringFromColumnIndex($totalColumns);
@@ -315,11 +315,11 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                     ]);
 
                     // Fila 2: subgrupos.
-                    if (count($coverageIndexes) >= 11) {
+                    if (count($coverageIndexes) >= 15) {
                         $g1Start = Coordinate::stringFromColumnIndex($coverageIndexes[0]);
-                        $g1End = Coordinate::stringFromColumnIndex($coverageIndexes[4]);
-                        $g2Start = Coordinate::stringFromColumnIndex($coverageIndexes[5]);
-                        $g2End = Coordinate::stringFromColumnIndex($coverageIndexes[8]);
+                        $g1End = Coordinate::stringFromColumnIndex($coverageIndexes[6]);
+                        $g2Start = Coordinate::stringFromColumnIndex($coverageIndexes[7]);
+                        $g2End = Coordinate::stringFromColumnIndex($coverageIndexes[12]);
 
                         $sheet->getStyle("{$g1Start}2:{$g1End}2")->applyFromArray([
                             'fill' => [
@@ -368,6 +368,28 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                                 ],
                             ]);
                         }
+                    }
+
+                    // Refuerzo por posicion para que las 2 nuevas columnas
+                    // hereden exactamente el color de su bloque.
+                    if (count($coverageIndexes) >= 15) {
+                        $m1c1 = Coordinate::stringFromColumnIndex($coverageIndexes[5]);
+                        $m1c2 = Coordinate::stringFromColumnIndex($coverageIndexes[6]);
+                        $sheet->getStyle("{$m1c1}3:{$m1c2}3")->applyFromArray([
+                            'fill' => [
+                                'fillType' => Fill::FILL_SOLID,
+                                'startColor' => ['argb' => 'FFD9C27A'],
+                            ],
+                        ]);
+
+                        $m2c1 = Coordinate::stringFromColumnIndex($coverageIndexes[11]);
+                        $m2c2 = Coordinate::stringFromColumnIndex($coverageIndexes[12]);
+                        $sheet->getStyle("{$m2c1}3:{$m2c2}3")->applyFromArray([
+                            'fill' => [
+                                'fillType' => Fill::FILL_SOLID,
+                                'startColor' => ['argb' => 'FF9DBF88'],
+                            ],
+                        ]);
                     }
                 }
 
@@ -449,16 +471,16 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                             ],
                         ]);
 
-                        // % ESQUEMA COMPLETO ... (columnas 10 y 11 de cobertura): 11 bold
-                        $c10 = Coordinate::stringFromColumnIndex($coverageIndexes[9]);
-                        $c11 = Coordinate::stringFromColumnIndex($coverageIndexes[10]);
-                        $sheet->getStyle("{$c10}2:{$c10}3")->applyFromArray([
+                        // % ESQUEMA COMPLETO ... (columnas 14 y 15 de cobertura): 11 bold
+                        $c14 = Coordinate::stringFromColumnIndex($coverageIndexes[13]);
+                        $c15 = Coordinate::stringFromColumnIndex($coverageIndexes[14]);
+                        $sheet->getStyle("{$c14}2:{$c14}3")->applyFromArray([
                             'font' => [
                                 'size' => 11,
                                 'bold' => true,
                             ],
                         ]);
-                        $sheet->getStyle("{$c11}2:{$c11}3")->applyFromArray([
+                        $sheet->getStyle("{$c15}2:{$c15}3")->applyFromArray([
                             'font' => [
                                 'size' => 11,
                                 'bold' => true,
@@ -642,6 +664,8 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
             '% HEXAVALENTE (<1 ANO)',
             '% ROTAVIRUS RV1',
             '% NEUMOCOCICA CONJUGADA (<1 ANO)',
+            'DOSIS APLICADAS PARA CALCULO DE PROMEDIO DE ESQUEMAS COMPLETOS <1 ANO',
+            'PROMEDIO ESQUEMA COMPLETO COBERTURAS EN <1 ANO',
         ];
 
         $secondGroup = [
@@ -649,6 +673,8 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
             '% NEUMOCOCICA CONJUGADA (1 ANO)',
             '% SRP 1RA',
             '% SRP 2DA',
+            'DOSIS APLICADAS PARA CALCULO DE PROMEDIO DE ESQUEMAS COMPLETOS 1 ANO',
+            '% PROMEDIO ESQUEMA COMPLETO EN 1 ANO',
         ];
 
         if (in_array($v, $firstGroup, true)) {
@@ -739,6 +765,10 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
             '% NEUMOCOCICA CONJUGADA (1 ANO)' => 'FF548135',
             '% SRP 1RA' => 'FF6699FF',
             '% SRP 2DA' => 'FF6699FF',
+            'DOSIS APLICADAS PARA CALCULO DE PROMEDIO DE ESQUEMAS COMPLETOS <1 ANO' => 'FFD9C27A',
+            'PROMEDIO ESQUEMA COMPLETO COBERTURAS EN <1 ANO' => 'FFD9C27A',
+            'DOSIS APLICADAS PARA CALCULO DE PROMEDIO DE ESQUEMAS COMPLETOS 1 ANO' => 'FF9DBF88',
+            '% PROMEDIO ESQUEMA COMPLETO EN 1 ANO' => 'FF9DBF88',
             '% ESQUEMA COMPLETO DE DPT EN 4 ANOS' => 'FF00CCFF',
             '% ESQUEMA COMPLETO DE SRP 2A EN 6 ANOS' => 'FF6699FF',
             default => null,
@@ -796,10 +826,14 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
             ['apartado' => 'COBERTURA PVU', 'variable' => '% Hexavalente (<1 AÑO)'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% Rotavirus RV1'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% Neumococica conjugada (<1 AÑO)'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => 'DOSIS APLICADAS PARA CÁLCULO DE PROMEDIO DE ESQUEMAS COMPLETOS <1 AÑO'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => 'PROMEDIO ESQUEMA COMPLETO COBERTURAS EN <1 AÑO'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% Hexavalente (1 AÑO)'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% Neumococica conjugada (1 AÑO)'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% SRP 1ra'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% SRP 2da'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => 'DOSIS APLICADAS PARA CÁLCULO DE PROMEDIO DE ESQUEMAS COMPLETOS 1 AÑO'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => '% PROMEDIO ESQUEMA COMPLETO EN 1 AÑO'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% ESQUEMA COMPLETO DE DPT EN 4 AÑOS'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% ESQUEMA COMPLETO DE SRP 2a EN 6 AÑOS'],
         ];
