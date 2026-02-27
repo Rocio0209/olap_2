@@ -307,7 +307,7 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                     $sheet->getStyle("{$covStartCol}1:{$covEndCol}1")->applyFromArray([
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'startColor' => ['argb' => 'FFFEF2CB'],
+                            'startColor' => ['argb' => 'FFE8EEF7'],
                         ],
                     ]);
 
@@ -321,14 +321,14 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                         $sheet->getStyle("{$g1Start}2:{$g1End}2")->applyFromArray([
                             'fill' => [
                                 'fillType' => Fill::FILL_SOLID,
-                                'startColor' => ['argb' => 'FFFFC000'],
+                                'startColor' => ['argb' => 'FFD9C27A'],
                             ],
                         ]);
 
                         $sheet->getStyle("{$g2Start}2:{$g2End}2")->applyFromArray([
                             'fill' => [
                                 'fillType' => Fill::FILL_SOLID,
-                                'startColor' => ['argb' => 'FF70AD47'],
+                                'startColor' => ['argb' => 'FF9DBF88'],
                             ],
                         ]);
                     }
