@@ -60,7 +60,7 @@
 
             </div>
 
-            <div class="mt-3">
+            <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
                 <button id="btnConsultarPreview" class="btn btn-primary">
                     Consultar (Preview)
                 </button>
@@ -70,6 +70,8 @@
                 <button id="btnDownloadExcel" class="btn btn-danger ms-2 d-none">
                     Descargar Excel
                 </button>
+                <div id="previewMetaInfo"
+                    class="d-none alert alert-info mb-0 ms-2 py-1 px-2 small"></div>
 
             </div>
 

@@ -65,7 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 |--------------------------------------------------------------------------
                 */
 
-                renderResumen(data.summary);
+                renderPreviewMeta(data.summary);
 
                 const table = data.table;
 
@@ -172,18 +172,14 @@ function renderRowsNested(table, elementosDOM, headerDef) {
 |--------------------------------------------------------------------------
 */
 
-function renderResumen(summary) {
-    const el = document.getElementById("resumenPreview");
+function renderPreviewMeta(summary) {
+    const el = document.getElementById("previewMetaInfo");
     if (!el) return;
 
     el.classList.remove("d-none");
-
-    el.innerHTML = `
-        <strong>${escapeHtml(summary?.message ?? "OK")}</strong><br>
-        Total CLUES: ${escapeHtml(String(summary?.total_clues ?? 0))} |
-        Filas (scope preview): ${escapeHtml(String(summary?.total_rows ?? 0))} |
-        Preview rows: ${escapeHtml(String(summary?.preview_rows ?? 0))}
-    `;
+    const previewRows = escapeHtml(String(summary?.preview_rows ?? 0));
+    const totalClues = escapeHtml(String(summary?.total_clues ?? 0));
+    el.textContent = `Preview: ${previewRows} de ${totalClues} consultados`;
 }
 
 
@@ -220,7 +216,7 @@ function buildNestedHeadersFromResponse(table) {
 window.clearPreview = function () {
 
     const container = document.getElementById("previewContainer");
-    const resumen = document.getElementById("resumenPreview");
+    const resumen = document.getElementById("previewMetaInfo");
 
     // Ocultar botones
     document.getElementById("btnExportarExcel")?.classList.add("d-none");
@@ -232,7 +228,7 @@ window.clearPreview = function () {
 
     if (resumen) {
         resumen.classList.add("d-none");
-        resumen.innerHTML = "";
+        resumen.textContent = "";
     }
 
     const header1 = document.getElementById("tablaHeader");
