@@ -93,6 +93,11 @@ class FetchTransformChunk implements ShouldQueue
 
     public function failed(\Throwable $e): void
     {
+        $export = Export::find($this->exportId);
+        if ($export && $export->status === 'cancelled') {
+            return;
+        }
+
         Export::where('id', $this->exportId)->update([
             'status' => 'failed',
             'error'  => $e->getMessage(),

@@ -82,6 +82,10 @@ class ExportsController extends Controller
 
         $batch = Bus::batch($jobs)
             ->catch(function (Batch $batch, Throwable $e) use ($export) {
+                $export->refresh();
+                if ($export->status === 'cancelled') {
+                    return;
+                }
                 $export->update([
                     'status' => 'failed',
                     'error'  => $e->getMessage(),

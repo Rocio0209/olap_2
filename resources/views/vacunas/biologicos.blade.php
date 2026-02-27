@@ -96,7 +96,7 @@
         </div>
     </x-modal-aviso>
 
-    <x-modal-aviso id="cancelExportModal" modaltype="warning" textTitle="Cancelar exportacion"
+    <x-modal-aviso id="cancelExportModal" modaltype="danger" textTitle="Cancelar exportacion"
         accionBtnTxt="Si, cancelar" accionBtnClass="btn-danger" closeDataModalTxt="Continuar"
         closeDataModalClass="btn-secondary" :showOk="true" :showCerrar="true">
         <div id="cancelExportBody">

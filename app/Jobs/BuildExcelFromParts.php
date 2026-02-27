@@ -21,6 +21,9 @@ class BuildExcelFromParts implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, Batchable;
 
     public int $exportId;
+    public int $tries = 1;
+    public int $timeout = 1800;
+    public bool $failOnTimeout = true;
 
     public function __construct(int $exportId)
     {

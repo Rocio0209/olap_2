@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const clues = window.getSelectedClues?.() ?? [];
 
         if (!clues.length) {
-            alert("Selecciona al menos 1 CLUES.");
+            console.warn("Selecciona al menos 1 CLUES.");
             return;
         }
 
@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (!res.ok || !data.ok) {
                 hideExportProgressModal();
-                alert("Error creando export");
+                console.error("Error creando export");
                 btnExport.disabled = false;
                 return;
             }
@@ -56,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (e) {
             console.error(e);
             hideExportProgressModal();
-            alert("Error inesperado.");
+            console.error("Error inesperado.");
             btnExport.disabled = false;
         }
     });
@@ -101,7 +101,7 @@ function startPolling(exportId, button) {
                 currentInterval = null;
                 hideExportProgressModal();
                 button.disabled = false;
-                alert("Error consultando progreso");
+                console.error("Error consultando progreso");
                 return;
             }
 
@@ -126,7 +126,7 @@ function startPolling(exportId, button) {
                 currentInterval = null;
                 hideExportProgressModal();
                 button.disabled = false;
-                alert("La exportacion fallo.");
+                console.error("La exportacion fallo.");
                 currentExportId = null;
             }
 
@@ -135,7 +135,6 @@ function startPolling(exportId, button) {
                 currentInterval = null;
                 hideExportProgressModal();
                 button.disabled = false;
-                alert("La exportacion fue cancelada.");
                 currentExportId = null;
             }
         } catch (e) {
@@ -144,7 +143,7 @@ function startPolling(exportId, button) {
             currentInterval = null;
             hideExportProgressModal();
             button.disabled = false;
-            alert("Error de red consultando progreso.");
+            console.error("Error de red consultando progreso.");
             currentExportId = null;
         }
     }, 2000);
@@ -264,7 +263,7 @@ async function cancelCurrentExport(exportButton, cancelButton) {
 
         const data = await res.json();
         if (!res.ok || !data.ok) {
-            alert(data?.message ?? "No se pudo cancelar la exportacion.");
+            console.error(data?.message ?? "No se pudo cancelar la exportacion.");
             return;
         }
 
@@ -278,7 +277,7 @@ async function cancelCurrentExport(exportButton, cancelButton) {
         currentExportId = null;
     } catch (e) {
         console.error(e);
-        alert("Error cancelando exportacion.");
+        console.error("Error cancelando exportacion.");
     } finally {
         cancelButton.disabled = false;
     }
