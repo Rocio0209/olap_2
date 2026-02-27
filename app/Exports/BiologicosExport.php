@@ -11,6 +11,7 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullComparison
 {
@@ -507,6 +508,9 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                     ]);
                 }
 
+                // Aplicar formulas de cobertura (fila 4 en adelante).
+                $this->applyCoverageFormulas($sheet, $totalColumns, $highestRow);
+
                 $sheet->getRowDimension(1)->setRowHeight(28);
                 $sheet->getRowDimension(2)->setRowHeight(36);
                 $sheet->getRowDimension(3)->setRowHeight(124);
@@ -808,6 +812,210 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
         $value = str_replace(['Ã‘', 'Ã“', 'Ã', 'Ã‰', 'Ã', 'Ãš'], ['N', 'O', 'A', 'E', 'I', 'U'], $value);
 
         return $value;
+    }
+
+    protected function applyCoverageFormulas(Worksheet $sheet, int $totalColumns, int $highestRow): void
+    {
+        if ($highestRow < 4) {
+            return;
+        }
+
+        [$labelToColumn, $codeToColumn] = $this->buildLabelAndCodeMaps($sheet, $totalColumns);
+        $populationColumns = $this->resolvePopulationColumns($labelToColumn);
+        $formulaDefinitions = $this->getCoverageFormulaDefinitions();
+
+        foreach ($formulaDefinitions as $targetLabel => $def) {
+            $targetKey = $this->normalizeText($targetLabel);
+            $targetColumn = $labelToColumn[$targetKey] ?? null;
+            if (!$targetColumn) {
+                continue;
+            }
+
+            $populationColumn = $populationColumns[$def['population_key']] ?? null;
+            if (!$populationColumn) {
+                continue;
+            }
+
+            $selectedVariant = null;
+            foreach ($def['variants'] as $variant) {
+                $allCodesExist = true;
+                foreach ($variant as $code) {
+                    if (!isset($codeToColumn[$code])) {
+                        $allCodesExist = false;
+                        break;
+                    }
+                }
+                if ($allCodesExist) {
+                    $selectedVariant = $variant;
+                    break;
+                }
+            }
+
+            if ($selectedVariant === null) {
+                continue;
+            }
+
+            $targetColLetter = Coordinate::stringFromColumnIndex($targetColumn);
+            for ($row = 4; $row <= $highestRow; $row++) {
+                $numeratorParts = [];
+                foreach ($selectedVariant as $code) {
+                    $srcCol = Coordinate::stringFromColumnIndex($codeToColumn[$code]);
+                    $numeratorParts[] = "{$srcCol}{$row}";
+                }
+
+                $numeratorExpr = count($numeratorParts) > 1
+                    ? '(' . implode('+', $numeratorParts) . ')'
+                    : $numeratorParts[0];
+
+                $populationColLetter = Coordinate::stringFromColumnIndex($populationColumn);
+                $formula = "=IFERROR(($numeratorExpr)/(($populationColLetter$row*0.0833)*12),0)";
+                $sheet->setCellValue("{$targetColLetter}{$row}", $formula);
+            }
+        }
+    }
+
+    /**
+     * @return array{0: array<string,int>, 1: array<string,int>}
+     */
+    protected function buildLabelAndCodeMaps(Worksheet $sheet, int $totalColumns): array
+    {
+        $labelToColumn = [];
+        $codeToColumn = [];
+
+        for ($col = 1; $col <= $totalColumns; $col++) {
+            $texts = [];
+            for ($row = 1; $row <= 3; $row++) {
+                $value = $sheet->getCellByColumnAndRow($col, $row)->getValue();
+                if (!is_string($value) || trim($value) === '') {
+                    continue;
+                }
+                $texts[] = trim($value);
+            }
+
+            foreach ($texts as $text) {
+                $normalized = $this->normalizeText($text);
+                if ($normalized !== '' && !isset($labelToColumn[$normalized])) {
+                    $labelToColumn[$normalized] = $col;
+                }
+
+                if (preg_match_all('/\b([A-Z]{3}\d{2})\b/u', $normalized, $matches)) {
+                    foreach ($matches[1] as $code) {
+                        if (!isset($codeToColumn[$code])) {
+                            $codeToColumn[$code] = $col;
+                        }
+                    }
+                }
+            }
+        }
+
+        return [$labelToColumn, $codeToColumn];
+    }
+
+    /**
+     * @param array<string,int> $labelToColumn
+     * @return array<string,int>
+     */
+    protected function resolvePopulationColumns(array $labelToColumn): array
+    {
+        return [
+            'POBLACION_MENOR_1_ANO' => $labelToColumn['POBLACION <1 ANO'] ?? 0,
+            'POBLACION_1_ANO' => $labelToColumn['POBLACION 1 ANO'] ?? 0,
+            'POBLACION_4_ANOS' => $labelToColumn['POBLACION 4 ANO'] ?? 0,
+            'POBLACION_6_ANOS' => $labelToColumn['POBLACION 6 ANO'] ?? 0,
+        ];
+    }
+
+    /**
+     * @return array<string,array{population_key:string,variants:array<int,array<int,string>>}>
+     */
+    protected function getCoverageFormulaDefinitions(): array
+    {
+        return [
+            '% BCG' => [
+                'population_key' => 'POBLACION_MENOR_1_ANO',
+                'variants' => [
+                    ['BIO01', 'BIO50'],
+                    ['VBC02', 'BIO50'],
+                ],
+            ],
+            '% HEPATITIS B (<1 ANO)' => [
+                'population_key' => 'POBLACION_MENOR_1_ANO',
+                'variants' => [
+                    ['VAC06'],
+                    ['BIO08'],
+                ],
+            ],
+            '% HEXAVALENTE (<1 ANO)' => [
+                'population_key' => 'POBLACION_MENOR_1_ANO',
+                'variants' => [
+                    ['BIO05'],
+                    ['VAC03'],
+                    ['VAC69'],
+                ],
+            ],
+            '% ROTAVIRUS RV1' => [
+                'population_key' => 'POBLACION_MENOR_1_ANO',
+                'variants' => [
+                    ['BIO56'],
+                    ['VAC14'],
+                    ['VRV02', 'VRV04'],
+                ],
+            ],
+            '% NEUMOCOCICA CONJUGADA (<1 ANO)' => [
+                'population_key' => 'POBLACION_MENOR_1_ANO',
+                'variants' => [
+                    ['BIO15'],
+                    ['VAC18'],
+                ],
+            ],
+            '% HEXAVALENTE (1 ANO)' => [
+                'population_key' => 'POBLACION_1_ANO',
+                'variants' => [
+                    ['BIO06'],
+                    ['VAC04'],
+                    ['VAC70'],
+                ],
+            ],
+            '% NEUMOCOCICA CONJUGADA (1 ANO)' => [
+                'population_key' => 'POBLACION_1_ANO',
+                'variants' => [
+                    ['BIO16'],
+                    ['VAC19'],
+                ],
+            ],
+            '% SRP 1RA' => [
+                'population_key' => 'POBLACION_1_ANO',
+                'variants' => [
+                    ['BIO30'],
+                    ['VAC23'],
+                ],
+            ],
+            '% SRP 2DA' => [
+                'population_key' => 'POBLACION_1_ANO',
+                'variants' => [
+                    ['BIO63'],
+                    ['VAC25'],
+                    ['VTV01'],
+                ],
+            ],
+            '% ESQUEMA COMPLETO DE DPT EN 4 ANOS' => [
+                'population_key' => 'POBLACION_4_ANOS',
+                'variants' => [
+                    ['BIO55'],
+                    ['BIO90'],
+                    ['VAC12'],
+                ],
+            ],
+            '% ESQUEMA COMPLETO DE SRP 2A EN 6 ANOS' => [
+                'population_key' => 'POBLACION_6_ANOS',
+                'variants' => [
+                    ['BIO64'],
+                    ['BIO98'],
+                    ['VAC24'],
+                    ['VAC81'],
+                ],
+            ],
+        ];
     }
 
     /**
