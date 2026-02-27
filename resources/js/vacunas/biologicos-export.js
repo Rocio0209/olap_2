@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             currentExportId = data.export.id;
-            startPolling(data.export.id, btnExport);
+            startPolling(currentExportId, btnExport);
         } catch (e) {
             console.error(e);
             hideExportProgressModal();
@@ -93,7 +93,7 @@ function startPolling(exportId, button) {
 
     currentInterval = setInterval(async () => {
         try {
-            const res = await fetch(`/api/vacunas/exports/${exportId}`);
+            const res = await fetch(`/api/vacunas/exports/${encodeURIComponent(exportId)}`);
             const data = await res.json();
 
             if (!res.ok || !data.ok) {
@@ -216,7 +216,7 @@ function showDownloadButton(exportId) {
 
     downloadBtn.classList.remove("d-none");
     downloadBtn.onclick = () => {
-        window.location.href = `/api/vacunas/exports/${exportId}/download`;
+        window.location.href = `/api/vacunas/exports/${encodeURIComponent(exportId)}/download`;
     };
 }
 
@@ -254,7 +254,7 @@ async function cancelCurrentExport(exportButton, cancelButton) {
     cancelButton.disabled = true;
 
     try {
-        const res = await fetch(`/api/vacunas/exports/${currentExportId}/cancel`, {
+        const res = await fetch(`/api/vacunas/exports/${encodeURIComponent(currentExportId)}/cancel`, {
             method: "POST",
             headers: {
                 Accept: "application/json",

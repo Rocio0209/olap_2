@@ -6,8 +6,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Export;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Bus\Batch;
 use Throwable;
+use Illuminate\Contracts\Encryption\DecryptException;
 use App\Jobs\FetchTransformChunk;
 use App\Jobs\BuildExcelFromParts;
 
@@ -101,7 +103,7 @@ class ExportsController extends Controller
         return response()->json([
             'ok' => true,
             'export' => [
-                'id' => $export->id,
+                'id' => $this->toPublicId($export->id),
                 'status' => $export->status,
                 'progress' => $export->progress,
             ],
@@ -116,13 +118,13 @@ class ExportsController extends Controller
 
 public function show($id)
 {
-    $export = Export::findOrFail($id);
+    $export = $this->resolveExportByPublicId($id);
 
     if ($export->status === 'cancelled') {
         return response()->json([
             'ok' => true,
             'export' => [
-                'id'       => $export->id,
+                'id'       => $this->toPublicId($export->id),
                 'status'   => $export->status,
                 'progress' => (int) $export->progress,
                 'error'    => $export->error,
@@ -166,7 +168,7 @@ public function show($id)
     return response()->json([
         'ok' => true,
         'export' => [
-            'id'       => $export->id,
+            'id'       => $this->toPublicId($export->id),
             'status'   => $export->status,
             'progress' => (int) $progress,
             'error'    => $export->error,
@@ -181,14 +183,14 @@ public function show($id)
     */
     public function cancel($id)
     {
-        $export = Export::findOrFail($id);
+        $export = $this->resolveExportByPublicId($id);
 
         if (in_array($export->status, ['completed', 'failed', 'cancelled'], true)) {
             return response()->json([
                 'ok' => false,
                 'message' => "La exportación ya está en estado '{$export->status}'.",
                 'export' => [
-                    'id' => $export->id,
+                    'id' => $this->toPublicId($export->id),
                     'status' => $export->status,
                     'progress' => (int) $export->progress,
                 ],
@@ -212,7 +214,7 @@ public function show($id)
             'ok' => true,
             'message' => 'Exportación cancelada.',
             'export' => [
-                'id' => $export->id,
+                'id' => $this->toPublicId($export->id),
                 'status' => $export->status,
                 'progress' => (int) $export->progress,
             ],
@@ -227,7 +229,7 @@ public function show($id)
 
     public function download($id)
     {
-        $export = Export::findOrFail($id);
+        $export = $this->resolveExportByPublicId($id);
 
         if (!$export->final_path) {
             return response()->json([
@@ -249,5 +251,21 @@ public function show($id)
             $fullPath,
             basename($export->final_path)
         );
+    }
+
+    protected function toPublicId(int $id): string
+    {
+        return Crypt::encryptString((string) $id);
+    }
+
+    protected function resolveExportByPublicId(string $publicId): Export
+    {
+        try {
+            $id = (int) Crypt::decryptString($publicId);
+        } catch (DecryptException $e) {
+            abort(404);
+        }
+
+        return Export::findOrFail($id);
     }
 }
