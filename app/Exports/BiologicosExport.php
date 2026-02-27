@@ -823,6 +823,7 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
         [$labelToColumn, $codeToColumn] = $this->buildLabelAndCodeMaps($sheet, $totalColumns);
         $populationColumns = $this->resolvePopulationColumns($labelToColumn);
         $formulaDefinitions = $this->getCoverageFormulaDefinitions();
+        $selectedVariantsByLabel = [];
 
         foreach ($formulaDefinitions as $targetLabel => $def) {
             $targetKey = $this->normalizeText($targetLabel);
@@ -854,6 +855,7 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
             if ($selectedVariant === null) {
                 continue;
             }
+            $selectedVariantsByLabel[$targetKey] = $selectedVariant;
 
             $targetColLetter = Coordinate::stringFromColumnIndex($targetColumn);
             for ($row = 4; $row <= $highestRow; $row++) {
@@ -871,6 +873,160 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
                 $formula = "=IFERROR(($numeratorExpr)/(($populationColLetter$row*0.0833)*12),0)";
                 $sheet->setCellValue("{$targetColLetter}{$row}", $formula);
             }
+        }
+
+        // DOSIS APLICADAS ... <1 AÑO = suma de los numeradores seleccionados
+        // de las 5 primeras formulas de menores de 1 año.
+        $this->applyDoseAppliedFormula(
+            $sheet,
+            $highestRow,
+            $labelToColumn,
+            $codeToColumn,
+            $selectedVariantsByLabel,
+            'DOSIS APLICADAS PARA CALCULO DE PROMEDIO DE ESQUEMAS COMPLETOS <1 ANO',
+            [
+                '% BCG',
+                '% HEPATITIS B (<1 ANO)',
+                '% HEXAVALENTE (<1 ANO)',
+                '% ROTAVIRUS RV1',
+                '% NEUMOCOCICA CONJUGADA (<1 ANO)',
+            ]
+        );
+
+        // DOSIS APLICADAS ... 1 AÑO = suma de numeradores de las formulas 1 año.
+        $this->applyDoseAppliedFormula(
+            $sheet,
+            $highestRow,
+            $labelToColumn,
+            $codeToColumn,
+            $selectedVariantsByLabel,
+            'DOSIS APLICADAS PARA CALCULO DE PROMEDIO DE ESQUEMAS COMPLETOS 1 ANO',
+            [
+                '% HEXAVALENTE (1 ANO)',
+                '% NEUMOCOCICA CONJUGADA (1 ANO)',
+                '% SRP 1RA',
+                '% SRP 2DA',
+            ]
+        );
+
+        // PROMEDIO ESQUEMA COMPLETO COBERTURAS EN <1 AÑO
+        // Formula solicitada: POBLACION / (((DOSIS * 0.0833) * 12) * 5)
+        $this->applyPopulationOverDoseFormula(
+            $sheet,
+            $highestRow,
+            $labelToColumn,
+            $populationColumns,
+            'PROMEDIO ESQUEMA COMPLETO COBERTURAS EN <1 ANO',
+            'DOSIS APLICADAS PARA CALCULO DE PROMEDIO DE ESQUEMAS COMPLETOS <1 ANO',
+            'POBLACION_MENOR_1_ANO',
+            5
+        );
+
+        // % PROMEDIO ESQUEMA COMPLETO EN 1 AÑO
+        $this->applyPopulationOverDoseFormula(
+            $sheet,
+            $highestRow,
+            $labelToColumn,
+            $populationColumns,
+            '% PROMEDIO ESQUEMA COMPLETO EN 1 ANO',
+            'DOSIS APLICADAS PARA CALCULO DE PROMEDIO DE ESQUEMAS COMPLETOS 1 ANO',
+            'POBLACION_1_ANO',
+            4
+        );
+    }
+
+    /**
+     * @param array<string,int> $labelToColumn
+     * @param array<string,int> $codeToColumn
+     * @param array<string,array<int,string>> $selectedVariantsByLabel
+     * @param array<int,string> $sourceFormulaLabels
+     */
+    protected function applyDoseAppliedFormula(
+        Worksheet $sheet,
+        int $highestRow,
+        array $labelToColumn,
+        array $codeToColumn,
+        array $selectedVariantsByLabel,
+        string $targetDoseLabel,
+        array $sourceFormulaLabels
+    ): void {
+        $targetKey = $this->normalizeText($targetDoseLabel);
+        $targetColumn = $labelToColumn[$targetKey] ?? null;
+        if (!$targetColumn) {
+            return;
+        }
+
+        $targetColLetter = Coordinate::stringFromColumnIndex($targetColumn);
+
+        for ($row = 4; $row <= $highestRow; $row++) {
+            $terms = [];
+
+            foreach ($sourceFormulaLabels as $label) {
+                $sourceKey = $this->normalizeText($label);
+                $codes = $selectedVariantsByLabel[$sourceKey] ?? null;
+                if (!$codes) {
+                    continue;
+                }
+
+                $cells = [];
+                foreach ($codes as $code) {
+                    $colIdx = $codeToColumn[$code] ?? null;
+                    if (!$colIdx) {
+                        $cells = [];
+                        break;
+                    }
+                    $col = Coordinate::stringFromColumnIndex($colIdx);
+                    $cells[] = "{$col}{$row}";
+                }
+
+                if (empty($cells)) {
+                    continue;
+                }
+
+                $terms[] = count($cells) > 1
+                    ? '(' . implode('+', $cells) . ')'
+                    : $cells[0];
+            }
+
+            if (empty($terms)) {
+                $sheet->setCellValue("{$targetColLetter}{$row}", 0);
+                continue;
+            }
+
+            $sumExpr = implode('+', $terms);
+            $sheet->setCellValue("{$targetColLetter}{$row}", "=IFERROR({$sumExpr},0)");
+        }
+    }
+
+    /**
+     * @param array<string,int> $labelToColumn
+     * @param array<string,int> $populationColumns
+     */
+    protected function applyPopulationOverDoseFormula(
+        Worksheet $sheet,
+        int $highestRow,
+        array $labelToColumn,
+        array $populationColumns,
+        string $targetLabel,
+        string $doseAppliedLabel,
+        string $populationKey,
+        int $divisorFactor
+    ): void {
+        $targetColumn = $labelToColumn[$this->normalizeText($targetLabel)] ?? null;
+        $doseColumn = $labelToColumn[$this->normalizeText($doseAppliedLabel)] ?? null;
+        $populationColumn = $populationColumns[$populationKey] ?? null;
+
+        if (!$targetColumn || !$doseColumn || !$populationColumn) {
+            return;
+        }
+
+        $targetCol = Coordinate::stringFromColumnIndex($targetColumn);
+        $doseCol = Coordinate::stringFromColumnIndex($doseColumn);
+        $populationCol = Coordinate::stringFromColumnIndex($populationColumn);
+
+        for ($row = 4; $row <= $highestRow; $row++) {
+            $formula = "=IFERROR(($populationCol$row)/(((($doseCol$row)*0.0833)*12)*$divisorFactor),0)";
+            $sheet->setCellValue("{$targetCol}{$row}", $formula);
         }
     }
 
