@@ -26,8 +26,13 @@ class BuildExcelFromParts implements ShouldQueue
 
     public function handle(): void
     {
+        if ($this->batch()?->cancelled()) {
+            return;
+        }
+
         $export = Export::find($this->exportId);
         if (!$export) return;
+        if ($export->status === 'cancelled') return;
 
         /*
         |--------------------------------------------------------------------------
@@ -54,6 +59,9 @@ class BuildExcelFromParts implements ShouldQueue
             $finalPath,
             'local'
         );
+        if ($this->batch()?->cancelled()) {
+            return;
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -69,11 +77,13 @@ class BuildExcelFromParts implements ShouldQueue
         |--------------------------------------------------------------------------
         */
 
-        $export->update([
-            'status'     => 'completed',
-            'progress'   => 100,
-            'final_path' => $finalPath,
-        ]);
+        if ($export->status !== 'cancelled') {
+            $export->update([
+                'status'     => 'completed',
+                'progress'   => 100,
+                'final_path' => $finalPath,
+            ]);
+        }
     }
 
     public function failed(\Throwable $e): void

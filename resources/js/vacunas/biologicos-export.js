@@ -4,12 +4,19 @@ let currentInterval = null;
 let currentDisplayedProgress = 0;
 let progressAnimationFrame = null;
 let exportProgressModalInstance = null;
+let currentExportId = null;
 
 console.log("Biologicos Export cargado correctamente");
 
 document.addEventListener("DOMContentLoaded", () => {
     const btnExport = document.getElementById("btnExportarExcel");
+    const btnCancelExport = document.getElementById("btnCancelExport");
     if (!btnExport) return;
+
+    if (btnCancelExport && btnCancelExport.dataset.bound !== "1") {
+        btnCancelExport.dataset.bound = "1";
+        btnCancelExport.addEventListener("click", () => cancelCurrentExport(btnExport, btnCancelExport));
+    }
 
     btnExport.addEventListener("click", async () => {
         const catalogo = document.getElementById("catalogoInput")?.value?.trim() ?? "";
@@ -44,6 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
+            currentExportId = data.export.id;
             startPolling(data.export.id, btnExport);
         } catch (e) {
             console.error(e);
@@ -109,6 +117,7 @@ function startPolling(exportId, button) {
                     hideExportProgressModal();
                     button.disabled = false;
                     showDownloadButton(exportId);
+                    currentExportId = null;
                 }, 450);
             }
 
@@ -118,6 +127,16 @@ function startPolling(exportId, button) {
                 hideExportProgressModal();
                 button.disabled = false;
                 alert("La exportacion fallo.");
+                currentExportId = null;
+            }
+
+            if (exportData.status === "cancelled") {
+                clearInterval(currentInterval);
+                currentInterval = null;
+                hideExportProgressModal();
+                button.disabled = false;
+                alert("La exportacion fue cancelada.");
+                currentExportId = null;
             }
         } catch (e) {
             console.error(e);
@@ -126,6 +145,7 @@ function startPolling(exportId, button) {
             hideExportProgressModal();
             button.disabled = false;
             alert("Error de red consultando progreso.");
+            currentExportId = null;
         }
     }, 2000);
 }
@@ -218,4 +238,47 @@ function hideExportProgressModal() {
 
     const modal = exportProgressModalInstance ?? Bootstrap.Modal.getInstance(modalEl);
     modal?.hide();
+}
+
+async function cancelCurrentExport(exportButton, cancelButton) {
+    if (!currentExportId) {
+        hideExportProgressModal();
+        exportButton.disabled = false;
+        return;
+    }
+
+    if (!confirm("¿Deseas cancelar la exportacion actual?")) {
+        return;
+    }
+
+    cancelButton.disabled = true;
+
+    try {
+        const res = await fetch(`/api/vacunas/exports/${currentExportId}/cancel`, {
+            method: "POST",
+            headers: {
+                Accept: "application/json",
+            },
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            alert(data?.message ?? "No se pudo cancelar la exportacion.");
+            return;
+        }
+
+        if (currentInterval) {
+            clearInterval(currentInterval);
+            currentInterval = null;
+        }
+
+        hideExportProgressModal();
+        exportButton.disabled = false;
+        currentExportId = null;
+    } catch (e) {
+        console.error(e);
+        alert("Error cancelando exportacion.");
+    } finally {
+        cancelButton.disabled = false;
+    }
 }

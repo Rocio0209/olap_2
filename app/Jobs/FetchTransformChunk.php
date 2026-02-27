@@ -29,8 +29,13 @@ class FetchTransformChunk implements ShouldQueue
 
     public function handle(VacunasApiService $apiService): void
     {
+        if ($this->batch()?->cancelled()) {
+            return;
+        }
+
         $export = Export::find($this->exportId);
         if (!$export) return;
+        if ($export->status === 'cancelled') return;
 
         /*
         |--------------------------------------------------------------------------
@@ -42,6 +47,9 @@ class FetchTransformChunk implements ShouldQueue
         $params['clues'] = $this->chunk;
 
         $data = $apiService->biologicos($params);
+        if ($this->batch()?->cancelled()) {
+            return;
+        }
 
         /*
         |--------------------------------------------------------------------------

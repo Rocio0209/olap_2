@@ -108,6 +108,11 @@
                         <p class="mb-2">Tu archivo se esta preparando. Espera un momento...</p>
                         <x-progress-bar />
                     </div>
+                    <div class="modal-footer">
+                        <button type="button" id="btnCancelExport" class="btn btn-outline-danger btn-sm">
+                            Cancelar
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

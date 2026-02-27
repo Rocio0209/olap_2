@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Export;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Bus\Batch;
 use Throwable;
 use App\Jobs\FetchTransformChunk;
@@ -114,6 +115,18 @@ public function show($id)
 {
     $export = Export::findOrFail($id);
 
+    if ($export->status === 'cancelled') {
+        return response()->json([
+            'ok' => true,
+            'export' => [
+                'id'       => $export->id,
+                'status'   => $export->status,
+                'progress' => (int) $export->progress,
+                'error'    => $export->error,
+            ],
+        ]);
+    }
+
     $progress = $export->progress;
 
     if ($export->batch_id) {
@@ -124,8 +137,14 @@ public function show($id)
 
             $progress = $batch->progress(); // 🔥 progreso real
 
+            if ($batch->cancelled()) {
+                $export->update([
+                    'status' => 'cancelled',
+                ]);
+            }
+
             // Si terminó correctamente
-            if ($batch->finished() && !$batch->hasFailures()) {
+            if ($batch->finished() && !$batch->hasFailures() && $export->status !== 'cancelled') {
                 $export->update([
                     'status'   => 'completed',
                     'progress' => 100,
@@ -151,6 +170,55 @@ public function show($id)
         ],
     ]);
 }
+
+    /*
+    |--------------------------------------------------------------------------
+    | POST /api/vacunas/exports/{id}/cancel
+    |--------------------------------------------------------------------------
+    */
+    public function cancel($id)
+    {
+        $export = Export::findOrFail($id);
+
+        if (in_array($export->status, ['completed', 'failed', 'cancelled'], true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => "La exportación ya está en estado '{$export->status}'.",
+                'export' => [
+                    'id' => $export->id,
+                    'status' => $export->status,
+                    'progress' => (int) $export->progress,
+                ],
+            ], 409);
+        }
+
+        if ($export->batch_id) {
+            $batch = Bus::findBatch($export->batch_id);
+            if ($batch && !$batch->cancelled()) {
+                $batch->cancel();
+            }
+        }
+
+        $tmpPath = "exports/tmp/{$export->id}";
+        if (Storage::disk('local')->exists($tmpPath)) {
+            Storage::disk('local')->deleteDirectory($tmpPath);
+        }
+
+        $export->update([
+            'status' => 'cancelled',
+            'error' => null,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Exportación cancelada.',
+            'export' => [
+                'id' => $export->id,
+                'status' => $export->status,
+                'progress' => (int) $export->progress,
+            ],
+        ]);
+    }
 
     /*
     |--------------------------------------------------------------------------

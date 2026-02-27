@@ -14,6 +14,7 @@ Route::get('vacunas/clues_y_nombre_unidad_por_estado', [CluesController::class, 
 Route::get('vacunas/catalogos_y_cubos_sis', [BiologicosController::class, 'catalogosYCubosSis']);
 
 Route::post('vacunas/exports', [ExportsController::class, 'store']);
+Route::post('vacunas/exports/{id}/cancel', [ExportsController::class, 'cancel']);
 
 Route::get('vacunas/exports/{id}', [ExportsController::class, 'show']);
 
