@@ -627,17 +627,16 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
     {
         return match ($this->normalizeText($variable)) {
             '% BCG' => 'FF0066CC',
-            '% HEPATITIS B (<1 ANO)' => 'FFFFD965',
-            // No se especificó en la lista; se usa un tono cercano del diseño.
-            '% HEXAVALENTE (<1 ANO)' => 'FF6699FF',
+            '% HEPATITIS B (<1 AÑO)' => 'FFFFD965',
+            '% HEXAVALENTE (<1 AÑO)' => 'FF6699FF',
             '% ROTAVIRUS RV1' => 'FFFFC000',
-            '% NEUMOCOCICA CONJUGADA (<1 ANO)' => 'FF548135',
-            '% HEXAVALENTE (1 ANO)' => 'FFD4C19C',
-            '% NEUMOCOCICA CONJUGADA (1 ANO)' => 'FF548135',
+            '% NEUMOCOCICA CONJUGADA (<1 AÑO)' => 'FF548135',
+            '% HEXAVALENTE (1 AÑO)' => 'FFD4C19C',
+            '% NEUMOCOCICA CONJUGADA (1 AÑO)' => 'FF548135',
             '% SRP 1RA' => 'FF6699FF',
             '% SRP 2DA' => 'FF6699FF',
-            '% ESQUEMA COMPLETO DE DPT EN 4 ANOS' => 'FF00CCFF',
-            '% ESQUEMA COMPLETO DE SRP 2A EN 6 ANOS' => 'FF6699FF',
+            '% ESQUEMA COMPLETO DE DPT EN 4 AÑOS' => 'FF00CCFF',
+            '% ESQUEMA COMPLETO DE SRP 2A EN 6 AÑOS' => 'FF6699FF',
             default => null,
         };
     }
@@ -661,22 +660,22 @@ class BiologicosExport implements FromGenerator, WithEvents, WithStrictNullCompa
     protected function getAdditionalHeaderDefinitions(): array
     {
         return [
-            ['apartado' => 'POBLACION <1 ANO', 'variable' => 'POBLACION <1 ANO'],
-            ['apartado' => 'POBLACION 1 ANO', 'variable' => 'POBLACION 1 ANO'],
-            ['apartado' => 'POBLACION 4 ANO', 'variable' => 'POBLACION 4 ANO'],
-            ['apartado' => 'POBLACION 6 ANO', 'variable' => 'POBLACION 6 ANO'],
+            ['apartado' => 'POBLACION <1 ANO', 'variable' => 'POBLACIÓN <1 AÑO'],
+            ['apartado' => 'POBLACION 1 ANO', 'variable' => 'POBLACIÓN 1 AÑO'],
+            ['apartado' => 'POBLACION 4 ANO', 'variable' => 'POBLACIÓN 4 AÑO'],
+            ['apartado' => 'POBLACION 6 ANO', 'variable' => 'POBLACIÓN 6 AÑO'],
 
             ['apartado' => 'COBERTURA PVU', 'variable' => '% BCG'],
-            ['apartado' => 'COBERTURA PVU', 'variable' => '% Hepatitis B (<1 ANO)'],
-            ['apartado' => 'COBERTURA PVU', 'variable' => '% Hexavalente (<1 ANO)'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => '% Hepatitis B (<1 AÑO)'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => '% Hexavalente (<1 AÑO)'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% Rotavirus RV1'],
-            ['apartado' => 'COBERTURA PVU', 'variable' => '% Neumococica conjugada (<1 ANO)'],
-            ['apartado' => 'COBERTURA PVU', 'variable' => '% Hexavalente (1 ANO)'],
-            ['apartado' => 'COBERTURA PVU', 'variable' => '% Neumococica conjugada (1 ANO)'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => '% Neumococica conjugada (<1 AÑO)'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => '% Hexavalente (1 AÑO)'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => '% Neumococica conjugada (1 AÑO)'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% SRP 1ra'],
             ['apartado' => 'COBERTURA PVU', 'variable' => '% SRP 2da'],
-            ['apartado' => 'COBERTURA PVU', 'variable' => '% ESQUEMA COMPLETO DE DPT EN 4 ANOS'],
-            ['apartado' => 'COBERTURA PVU', 'variable' => '% ESQUEMA COMPLETO DE SRP 2a EN 6 ANOS'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => '% ESQUEMA COMPLETO DE DPT EN 4 AÑOS'],
+            ['apartado' => 'COBERTURA PVU', 'variable' => '% ESQUEMA COMPLETO DE SRP 2a EN 6 AÑOS'],
         ];
     }
 }
