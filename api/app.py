@@ -1,3 +1,12 @@
+"""
+Servicio FastAPI para consultas OLAP de vacunacion.
+
+Este modulo expone endpoints para:
+- listar catalogos/cubos SIS disponibles,
+- consultar biologicos por CLUES enriqueciendo con datos de unidad,
+- consultar CLUES y nombre de unidad por estado.
+"""
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -57,6 +66,12 @@ def ejecutar_query_lista(conn, query: str, field: str):
             pass
 
 def ejecutar_conexion_olap(fn: Callable[[Any], Any], catalogo: str | None = None):
+    """
+    Ejecuta una funcion con conexion OLAP abierta.
+
+    Inicializa COM para el hilo actual, crea conexion, ejecuta la funcion
+    proporcionada y garantiza cierre/limpieza de recursos al finalizar.
+    """
     conn = None
     try:
         pythoncom.CoInitialize()
@@ -75,6 +90,7 @@ def sql_lit(s: str) -> str:
     return (s or "").replace("'", "''").strip()
 
 def dmv_member_info(conn, catalogo: str, cubo: str, member_unique_name: str, ejecutar_query_rows_execute) -> dict | None:
+    """Consulta metadatos de un miembro en MDSCHEMA_MEMBERS por unique name."""
     cat = sql_lit(catalogo)
     cube = sql_lit(cubo)
     mun = sql_lit(member_unique_name)
@@ -105,6 +121,7 @@ DIMENSIONES_POR_ANIO = {
 }
 
 def detectar_anio(catalogo: str, cubo: str) -> int:
+    """Detecta el anio (YYYY) a partir del texto de catalogo/cubo."""
     txt = f"{catalogo or ''} {cubo or ''}"
     m = re.search(r"(19|20)\d{2}", txt)
     if not m:
@@ -112,6 +129,7 @@ def detectar_anio(catalogo: str, cubo: str) -> int:
     return int(m.group(0))
 
 def get_bases_por_anio(catalogo: str, cubo: str) -> dict:
+    """Resuelve base de jerarquias (unidad/variables) segun el anio detectado."""
     anio = detectar_anio(catalogo, cubo)
     cfg = DIMENSIONES_POR_ANIO.get(anio)
     if not cfg:
@@ -166,6 +184,7 @@ def mdx_rows_extract_unique_names(rows: list[dict]) -> list[str]:
     return uniq
 
 def build_ruta_detalle(unique_names: list[str], captions_map: dict[str, dict | None]) -> list[dict]:
+    """Construye estructura de ruta con caption y nivel para cada unique name."""
     detalle = []
     for un in unique_names:
         info = captions_map.get(un) or {}
@@ -178,6 +197,7 @@ def build_ruta_detalle(unique_names: list[str], captions_map: dict[str, dict | N
     return detalle
 
 def pick_caption_by_level(ruta_detalle: list[dict], level_unique_name: str) -> str | None:
+    """Regresa el caption que coincide con un level_unique_name dentro de la ruta."""
     level_unique_name = (level_unique_name or "").strip()
     for r in ruta_detalle or []:
         if (r.get("level_unique_name") or "").strip() == level_unique_name:
@@ -189,6 +209,7 @@ def mdx_str(s: str) -> str:
     return (s or "").replace('"', '""').strip()
 
 def _norm_txt(s: str) -> str:
+    """Normaliza texto para comparacion (sin acentos, mayusculas, espacios simples)."""
     s = (s or "").strip().upper()
     s = "".join(
         c for c in unicodedata.normalize("NFKD", s)
@@ -197,9 +218,11 @@ def _norm_txt(s: str) -> str:
     return " ".join(s.split())
 
 def es_migrante(nombre_variable: str) -> bool:
+    """Indica si una variable pertenece a la categoria migrante."""
     return "MIGRANTE" in _norm_txt(nombre_variable)
 
 def normalizar_apartado(nombre):
+    """Normaliza el nombre de apartado para usarlo como llave de agrupacion."""
     nombre = (nombre or "").upper()
     nombre = nombre.replace("Ó", "O").replace("Í", "I").replace("É", "E").replace("Á", "A").replace("Ú", "U")
     nombre = nombre.replace("  ", " ")
@@ -282,6 +305,7 @@ def asignar_grupo(nombre_variable: str, grupos_apartado: list) -> str:
     return "sin grupo"
 
 def extraer_edad_inicial(nombre_variable: str) -> int:
+    """Infere edad inicial aproximada en dias desde el nombre de la variable."""
     nombre = nombre_variable.upper()
 
     if "RECIÉN NACIDO" in nombre or "24 HORAS" in nombre:
@@ -360,6 +384,7 @@ INSTITUCION_POR_PREFIJO = {
 }
 
 def detectar_institucion_por_clues(clues: str) -> str | None:
+    """Mapea institucion por prefijo de CLUES usando un catalogo local."""
     c = (clues or "").strip().upper()
     if len(c) < 5:
         return None
@@ -400,6 +425,13 @@ def limpiar_nombre_unidad(nombre: str) -> str | None:
 
 @app.get("/catalogos_y_cubos_sis", dependencies=[Depends(verify_token)])
 def catalogos_y_cubos_sis():
+    """
+    Devuelve catalogos SIS y sus cubos reales disponibles.
+
+    - Filtra catalogos por patrones SIS_/Cubo solo sinba.
+    - Considera solo anios >= 2019.
+    - Para cada catalogo, lista cubos con CUBE_SOURCE=1.
+    """
     try:
         # 1) Obtener catálogos y filtrar SOLO SIS_ y Cubo solo sinba
         def get_catalogos_filtrados(conn):
@@ -495,6 +527,15 @@ def biologicos_por_clues_con_unidad(
     max_vars: int = Body(5000),
     incluir_ceros: bool = Body(True),
 ):
+    """
+    Consulta biologicos por CLUES y arma respuesta agrupada por apartado/grupo.
+
+    Para cada CLUES:
+    - resuelve datos de unidad medica (nombre, entidad, jurisdiccion, municipio),
+    - ejecuta MDX para obtener variables y totales,
+    - agrega total migrantes por apartado,
+    - devuelve estructura lista para consumo del frontend.
+    """
     try:
         # -----------------------------
         # Validación / normalización inputs
@@ -834,6 +875,14 @@ def clues_y_nombre_unidad_por_estado(
     estado: str = Body("HIDALGO"),
     max_clues: int = Body(50000),
 ):
+    """
+    Lista CLUES y nombre de unidad para una entidad/estado dentro del cubo.
+
+    Flujo:
+    - ubica el miembro de Entidad por caption,
+    - desciende a nivel CLUES y calcula NOMBRE_UNIDAD via MDX,
+    - limpia nombres no medicos y deduplica CLUES.
+    """
     try:
         catalogo = (catalogo or "").strip()
         cubo = (cubo or "").strip()
