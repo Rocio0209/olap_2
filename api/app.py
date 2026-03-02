@@ -118,6 +118,7 @@ DIMENSIONES_POR_ANIO = {
     2023: {"unidad_base": "[DIM UNIDAD].[Unidad Médica]",      "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
     2024: {"unidad_base": "[DIM UNIDAD].[Unidad Médica]",      "vars_base": "[DIM VARIABLES].[Apartado y Variable]"},
     2025: {"unidad_base": "[DIM UNIDADES2025].[Unidad Médica]","vars_base": "[DIM VARIABLES2025].[Apartado y Variable]"},
+    2026: {"unidad_base": "[DIM_UNIDADES].[Unidad Médica]","vars_base": "[DIM_VARIABLES].[Apartado y Variable]"},
 }
 
 def detectar_anio(catalogo: str, cubo: str) -> int:
