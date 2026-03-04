@@ -334,6 +334,13 @@ def mdx_members_axis0(conn: Any, mdx: str) -> list[dict]:
         })
     return out
 
+def ejecutar_mdx_members_axis0(conn: Any, mdx: str) -> list[dict]:
+    """
+    Compatibilidad: ejecuta un MDX y devuelve los miembros del eje 0.
+    Este helper existe para mantener llamadas legacy en endpoints debug.
+    """
+    return mdx_members_axis0(conn, mdx)
+
 
 # -----------------------------
 # DMVs - resolver captions por unique name (con cache)
